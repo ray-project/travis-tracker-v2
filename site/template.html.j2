@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, shrink-to-fit=no"
+    />
+
+    <!-- Bootstrap CSS -->
+    <link
+      rel="stylesheet"
+      href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+      integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z"
+      crossorigin="anonymous"
+    />
+
+    <link rel="icon" href="static/favicon.ico" />
+
+    <style>
+      .item {
+        width: 8%;
+        /* border: 1px solid grey; */
+        background-color: #28a745;
+        border-radius: 1px;
+        margin-right: 1px;
+        float: left;
+        display: block;
+        height: 20px;
+      }
+
+      .filled {
+        background-color: #dc3545;
+      }
+    </style>
+
+    <title>Ray Travis Tracker</title>
+  </head>
+  <body>
+    <div class="container" style="padding: 5% 5%">
+      <div class="row align-items-center" style="padding-bottom: 3%;">
+        <img src="static/ray-bug.png" height="100px"></img>
+        <h1>Ray Flakey Test Tracker</h1>
+      </div>
+
+      <div class="row" style="padding-top: 1%">
+        <div class="col">
+          <h2>Failed Tests over Past 10 Commits</h2>
+        </div>
+      </div>
+
+      {% for item in display %}
+
+        <div class="row" style="padding-top: 1%">
+          <div class="col offset-sm-1">
+            <div class="alert alert-danger" role="alert">
+              {{ item.name }}
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col offset-sm-2">
+            <div class="container" style="width: 80%; padding-bottom: 5%">
+              {% for commit in item.status_segment_bar %}
+                {% if commit.failed %}
+                  <div
+                    class="item filled"
+                    data-toggle="tooltip"
+                    data-placement="top"
+                    title="<p><img src='{{ commit.author_avatar }}' height='16px'/> {{ commit.message }}  </p>"
+                  ></div>
+                {% else %}
+                  <div
+                    class="item"
+                    data-toggle="tooltip"
+                    data-placement="top"
+                    title="<p><img src='{{ commit.author_avatar }}' height='16px'/> {{ commit.message }}  </p>"
+                  ></div>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        {% for link in item.travis_links %}
+          <div class="row">
+            <div class="col offset-sm-1" style="max-width: 92%;">
+              <a href="{{ link.job_url }}">
+                <p
+                  style="
+                    font-family: monospace;
+                    font-size: larger;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    overflow: hidden;
+                  "
+                >
+                  {{ link.sha_short }} {{ link.build_env }}
+                </p>
+              </a>
+            </div>
+          </div>
+        {% endfor %}
+      {% endfor %}
+    </div>
+
+    <!-- Optional JavaScript -->
+    <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+    <script
+      src="https://code.jquery.com/jquery-3.5.1.slim.min.js"
+      integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"
+      integrity="sha384-9/reFTGAW83EW2RDu2S0VKaIzap3H66lZH81PoYlFhbGU+6BZp6G7niu735Sk7lN"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"
+      integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV"
+      crossorigin="anonymous"
+    ></script>
+    <script>
+      $(function () {
+        $('[data-toggle="tooltip"]').tooltip({
+          html: true
+        })
+      })
+    </script>
+  </body>
+</html>

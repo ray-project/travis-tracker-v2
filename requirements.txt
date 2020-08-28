@@ -1,0 +1,5 @@
+python-dotenv==0.14.0
+boto3==1.14.50
+dataclasses
+tqdm
+jinja2
