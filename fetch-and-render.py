@@ -241,7 +241,10 @@ if __name__ == "__main__":
             display.status_segment_bar[sha_idx].failed = True
             display.travis_links.append(SiteTravisLink(sha[:6], build_env, job_url))
 
-        failed_tests_displays.append(display)
+        if display.status_segment_bar[0].failed:
+            failed_tests_displays.insert(0, display)
+        else:
+            failed_tests_displays.append(display)
 
     print("⌛️ Generating Sites")
     with open("site/template.html.j2") as f:
