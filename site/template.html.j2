@@ -104,7 +104,17 @@
           </div>
         {% endfor %}
       {% endfor %}
+
+      <div class="row">
+        <div class="col">
+          <div class="alert alert-light" role="alert">
+            <p id="pageAge"></p>
+          </div>
+        </div>
+      </div>
+
     </div>
+
 
     <!-- Optional JavaScript -->
     <!-- jQuery first, then Popper.js, then Bootstrap JS -->
@@ -123,12 +133,19 @@
       integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV"
       crossorigin="anonymous"
     ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/moment@2.27.0/moment.min.js"
+      crossorigin="anonymous"
+    ></script>
     <script>
       $(function () {
         $('[data-toggle="tooltip"]').tooltip({
           html: true
         })
       })
+    </script>
+    <script>
+      document.getElementById("pageAge").innerHTML = "Page Generated: " + moment("{{ unix_timestamp }}", "X").fromNow();
     </script>
   </body>
 </html>

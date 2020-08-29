@@ -1,11 +1,12 @@
 import json
 import os
+import time
 from dataclasses import dataclass
 from itertools import chain
 from pathlib import Path
 from pprint import pprint
 from sqlite3 import connect
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Union
 
 import boto3
 import requests
@@ -245,6 +246,8 @@ if __name__ == "__main__":
     print("⌛️ Generating Sites")
     with open("site/template.html.j2") as f:
         template = Template(f.read())
-    rendered = template.render(display=failed_tests_displays)
+    rendered = template.render(
+        display=failed_tests_displays, unix_timestamp=str(time.time())
+    )
     with open("site/index.html", "w") as f:
         f.write(rendered)
