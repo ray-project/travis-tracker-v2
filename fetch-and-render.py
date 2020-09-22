@@ -15,61 +15,13 @@ from jinja2 import Template
 from tqdm import tqdm
 from typing_extensions import Literal
 
-TestResultType = Union[
-    Literal["PASSED"], Literal["FAILED"], Literal["FLAKY"], Literal["TIMEOUT"]
-]
-
-
-@dataclass
-class GHCommit:
-    sha: str
-
-    message: str
-    html_url: str
-
-    author_login: str
-    author_avatar_url: str
-
-
-@dataclass
-class TestResult:
-    test_name: str
-    status: TestResultType
-
-
-@dataclass
-class BuildResult:
-    sha: str
-    job_url: str
-    build_env: str
-    results: List[TestResult]
-
-    sha_index: Optional[int] = None
-
-
-@dataclass
-class SiteTravisLink:
-    sha_short: str
-    build_env: str
-    job_url: str
-
-
-@dataclass
-class SiteCommitTooltip:
-    failed: bool
-    message: str
-    author_avatar: str
-
-
-@dataclass
-class SiteFailedTest:
-    name: str
-    status_segment_bar: List[SiteCommitTooltip]
-    travis_links: List[SiteTravisLink]
+from interfaces import *
 
 
 def get_latest_commit() -> List[GHCommit]:
-    resp = requests.get("https://api.github.com/repos/ray-project/ray/commits")
+    resp = requests.get(
+        "https://api.github.com/repos/ray-project/ray/commits?per_page=100"
+    )
     assert resp.status_code == 200, "Pinging github API /commits failed"
     json_data = resp.json()
 
@@ -130,8 +82,7 @@ def process_single_build(dir_name) -> BuildResult:
 
 class ResultsDB:
     def __init__(self) -> None:
-        # self.table = connect(":memory:")
-        self.table = connect("results.db")
+        self.table = connect(":memory:")
         self.table.executescript(
             """
         DROP TABLE IF EXISTS test_result;
@@ -203,16 +154,14 @@ if __name__ == "__main__":
 
     client = boto3.client("s3")
 
-    NUM_COMMITS = 10
-
     print("💻 Downloading Files from S3")
-    for prefix in tqdm(prefixes[:NUM_COMMITS]):
+    for prefix in tqdm(prefixes):
         download_files_given_prefix(client, prefix)
         pass
 
     print("🔮 Analyzing Data")
     db = ResultsDB()
-    for i, prefix in tqdm(enumerate(prefixes[:NUM_COMMITS])):
+    for i, prefix in tqdm(enumerate(prefixes)):
         if not os.path.exists(prefix):
             # The direcotry dones't exists. It's fine
             continue
@@ -229,10 +178,8 @@ if __name__ == "__main__":
         display = SiteFailedTest(
             name,
             status_segment_bar=[
-                SiteCommitTooltip(
-                    False, commits[i].message, commits[i].author_avatar_url
-                )
-                for i in range(NUM_COMMITS)
+                SiteCommitTooltip(False, c.message, c.author_avatar_url)
+                for c in commits
             ],
             travis_links=[],
         )
@@ -247,10 +194,13 @@ if __name__ == "__main__":
             failed_tests_displays.append(display)
 
     print("⌛️ Generating Sites")
-    with open("site/template.html.j2") as f:
-        template = Template(f.read())
-    rendered = template.render(
-        display=failed_tests_displays, unix_timestamp=str(time.time())
-    )
-    with open("site/index.html", "w") as f:
-        f.write(rendered)
+    with open("js/src/data.json", "w") as f:
+        # TODO: directly dump .to_json()
+        json.dump([d.to_dict() for d in failed_tests_displays], f)
+    # with open("site/template.html.j2") as f:
+    #     template = Template(f.read())
+    # rendered = template.render(
+    #     display=failed_tests_displays, unix_timestamp=str(time.time())
+    # )
+    # with open("site/index.html", "w") as f:
+    #     f.write(rendered)

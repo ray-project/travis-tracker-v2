@@ -1,0 +1,37 @@
+{
+  "name": "travis-tracker-ui",
+  "private": true,
+  "description": "Ray project flakey test tracker.",
+  "version": "0.1.0",
+  "author": "Simon Mo <simon.mo@hey.com>",
+  "dependencies": {
+    "antd": "^4.6.4",
+    "gatsby": "^2.24.61",
+    "gatsby-image": "^2.4.19",
+    "gatsby-plugin-antd": "^2.2.0",
+    "gatsby-plugin-manifest": "^2.4.30",
+    "gatsby-plugin-offline": "^3.2.28",
+    "gatsby-plugin-react-helmet": "^3.3.11",
+    "gatsby-plugin-sharp": "^2.6.36",
+    "gatsby-source-filesystem": "^2.3.30",
+    "gatsby-transformer-sharp": "^2.5.15",
+    "prop-types": "^15.7.2",
+    "react": "^16.12.0",
+    "react-dom": "^16.12.0",
+    "react-helmet": "^6.1.0"
+  },
+  "devDependencies": {
+    "prettier": "2.1.1"
+  },
+  "keywords": [
+    "gatsby"
+  ],
+  "scripts": {
+    "build": "gatsby build",
+    "develop": "gatsby develop",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
+    "start": "npm run develop",
+    "serve": "gatsby serve",
+    "clean": "gatsby clean"
+  }
+}
