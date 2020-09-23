@@ -6,4 +6,4 @@ data:
 	python fetch-and-render.py
 
 site: interface data
-	cd js; npm ci; npm run build
+	cd js; yarn; yarn build
