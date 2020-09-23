@@ -29,7 +29,6 @@ jobs:
         pip install -r requirements.txt
     - name: Generate site
       run: |
-        python fetch-and-render.py
         make site
     - name: Upload site
       run: |

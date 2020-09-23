@@ -1,19 +1,15 @@
 import json
 import os
-import time
-from dataclasses import dataclass
 from itertools import chain
 from pathlib import Path
-from pprint import pprint
 from sqlite3 import connect
-from typing import List, Optional, Union
+from typing import List
+from subprocess import Popen, PIPE
 
 import boto3
 import requests
 from dotenv import load_dotenv
-from jinja2 import Template
 from tqdm import tqdm
-from typing_extensions import Literal
 
 from interfaces import *
 
@@ -37,16 +33,15 @@ def get_latest_commit() -> List[GHCommit]:
     ]
 
 
-def download_files_given_prefix(s3_client, prefix: str):
-    resp = s3_client.list_objects_v2(Bucket="ray-travis-logs", Prefix=prefix)
-    for content in resp.get("Contents", []):
-        key = content["Key"]
-
-        if os.path.exists(key):
-            continue
-
-        os.makedirs(os.path.dirname(key), exist_ok=True)
-        s3_client.download_file(Bucket="ray-travis-logs", Key=key, Filename=key)
+def download_files_given_prefix(prefix: str):
+    proc = Popen(
+        f"aws s3 sync s3://ray-travis-logs/{prefix} {prefix}",
+        shell=True,
+        stdout=PIPE,
+        stderr=PIPE,
+    )
+    status = proc.wait()
+    assert status == 0, proc.communicate()
 
 
 def yield_test_result(bazel_log_path):
@@ -207,7 +202,6 @@ class ResultsDB:
 
 if __name__ == "__main__":
     load_dotenv()
-    client = boto3.client("s3")
 
     print("🐙 Fetching Commits from Github")
     commits = get_latest_commit()
@@ -216,7 +210,7 @@ if __name__ == "__main__":
     prefixes = [f"bazel_events/master/{commit.sha}" for commit in commits]
 
     for prefix in tqdm(prefixes):
-        download_files_given_prefix(client, prefix)
+        download_files_given_prefix(prefix)
 
     print("✍️ Writing Data")
     db = ResultsDB("./results.db")
