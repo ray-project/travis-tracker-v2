@@ -71,6 +71,7 @@ def process_single_build(dir_name) -> BuildResult:
     return BuildResult(
         sha=metadata["build_env"]["TRAVIS_COMMIT"],
         job_url=metadata["build_env"]["TRAVIS_JOB_WEB_URL"],
+        os=metadata["build_env"]["TRAVIS_OS_NAME"],
         build_env=metadata["build_config"]["config"]["env"],
         results=list(
             chain.from_iterable(
@@ -81,8 +82,8 @@ def process_single_build(dir_name) -> BuildResult:
 
 
 class ResultsDB:
-    def __init__(self) -> None:
-        self.table = connect(":memory:")
+    def __init__(self, location=":memory:") -> None:
+        self.table = connect(location)
         self.table.executescript(
             """
         DROP TABLE IF EXISTS test_result;
@@ -90,117 +91,149 @@ class ResultsDB:
             test_name TEXT,
             status TEXT,
             build_env TEXT,
+            os TEXT,
             job_url TEXT,
-            sha TEXT,
-            sha_idx INTEGER
+            sha TEXT
         );
+
+        DROP TABLE IF EXISTS commits;
+        CREATE TABLE commits (
+            sha TEXT,
+            idx INT,
+            message TEXT,
+            url TEXT,
+            avatar_url TEXT
+        )
         """
         )
 
-    def write_build_result(self, build: BuildResult):
+    def write_commits(self, commits: List[GHCommit]):
         self.table.executemany(
-            "INSERT INTO test_result VALUES (?,?,?,?,?,?)",
+            "INSERT INTO commits VALUES (?,?,?,?,?)",
             [
                 (
-                    result.test_name,
-                    result.status,
-                    build.build_env,
-                    build.job_url,
-                    build.sha,
-                    build.sha_index,
+                    commit.sha,
+                    i,
+                    commit.message,
+                    commit.html_url,
+                    commit.author_avatar_url,
                 )
-                for result in build.results
+                for i, commit in enumerate(commits)
             ],
         )
         self.table.commit()
 
-    def get_failed_tests(self, first_k=10):
+    def write_build_results(self, dir_prefixes: List[str]):
+        records_to_insert = []
+        for prefix in tqdm(dir_prefixes):
+            if not os.path.exists(prefix):
+                # The direcotry dones't exists. It's fine
+                continue
+            for build in os.listdir(prefix):
+                dir_name = Path(prefix) / build
+                build_result = process_single_build(dir_name)
+                for test in build_result.results:
+                    records_to_insert.append(
+                        (
+                            test.test_name,
+                            test.status,
+                            build_result.build_env,
+                            build_result.os,
+                            build_result.job_url,
+                            build_result.sha,
+                        )
+                    )
+
+        self.table.executemany(
+            "INSERT INTO test_result VALUES (?,?,?,?,?,?)",
+            records_to_insert,
+        )
+        self.table.commit()
+
+    def list_failed_tests_ordered(self):
         cursor = self.table.execute(
             """
-        SELECT test_name, status, COUNT(*) as count
-        FROM test_result
-        WHERE sha_idx < ?
-        GROUP BY test_name, status
-        HAVING status == 'FAILED'
-        ORDER BY count DESC;
+            SELECT test_name, SUM(100 - commits.idx) as weight
+            FROM test_result, commits
+            WHERE test_result.sha == commits.sha
+            AND status == 'FAILED'
+            GROUP BY test_name
+            ORDER BY weight DESC;
         """,
-            (first_k,),
         )
         return cursor.fetchall()
 
-    def get_failed_test(self, test_name: str, test_status: str):
+    def get_travis_link(self, test_name: str):
         cursor = self.table.execute(
             """
-        SELECT build_env, job_url, sha, sha_idx
-        FROM test_result
-        WHERE test_name == (?)
-          AND status == (?)
-        ORDER BY sha_idx
+            -- Travis Link
+            SELECT commits.sha, commits.message, build_env, job_url, os
+            FROM test_result, commits
+            WHERE test_result.sha == commits.sha
+            AND status == 'FAILED'
+            AND test_name == (?)
+            ORDER BY commits.idx
             """,
-            (test_name, test_status),
+            (test_name,),
         )
-        return cursor.fetchall()
+        return [
+            SiteTravisLink(
+                sha_short=sha[:6], commit_message=msg, build_env=env, job_url=url, os=os
+            )
+            for sha, msg, env, url, os in cursor.fetchall()
+        ]
 
-    def _debug_list_all(self):
-        pprint(list(self.table.execute("SELECT * FROM test_result").fetchall()))
+    def get_commit_tooltips(self, test_name: str):
+        cursor = self.table.execute(
+            """
+            -- Commit Tooltip
+            SELECT commits.sha, commits.message, commits.url,
+                   commits.avatar_url, SUM(status == 'FAILED') as num_failed
+            FROM test_result, commits
+            WHERE test_result.sha == commits.sha
+            AND test_name == (?)
+            GROUP BY test_result.sha
+            ORDER BY commits.idx
+            """,
+            (test_name,),
+        )
+        return [
+            SiteCommitTooltip(
+                failed=num_failed > 0, message=msg, author_avatar=avatar, commit_url=url
+            )
+            for _, msg, url, avatar, num_failed in cursor.fetchall()
+        ]
 
 
 if __name__ == "__main__":
     load_dotenv()
-
-    commits = get_latest_commit()
-
-    prefixes = [f"bazel_events/master/{commit.sha}" for commit in commits]
-
     client = boto3.client("s3")
 
+    print("🐙 Fetching Commits from Github")
+    commits = get_latest_commit()
+
     print("💻 Downloading Files from S3")
+    prefixes = [f"bazel_events/master/{commit.sha}" for commit in commits]
+
     for prefix in tqdm(prefixes):
         download_files_given_prefix(client, prefix)
-        pass
+
+    print("✍️ Writing Data")
+    db = ResultsDB("./results.db")
+    db.write_commits(commits)
+    db.write_build_results(prefixes)
 
     print("🔮 Analyzing Data")
-    db = ResultsDB()
-    for i, prefix in tqdm(enumerate(prefixes)):
-        if not os.path.exists(prefix):
-            # The direcotry dones't exists. It's fine
-            continue
-        for build in os.listdir(prefix):
-            dir_name = Path(prefix) / build
-            build_result = process_single_build(dir_name)
-            build_result.sha_index = i
-            db.write_build_result(build_result)
+    failed_tests = db.list_failed_tests_ordered()
+    data_to_display = [
+        SiteFailedTest(
+            name=test_name,
+            status_segment_bar=db.get_commit_tooltips(test_name),
+            travis_links=db.get_travis_link(test_name),
+        ).to_dict()
+        for test_name, _ in failed_tests
+    ]
 
-    failed_tests = db.get_failed_tests()
-    failed_tests_displays: List[SiteFailedTest] = []
-    for failed in failed_tests:
-        name, status, count = failed
-        display = SiteFailedTest(
-            name,
-            status_segment_bar=[
-                SiteCommitTooltip(False, c.message, c.author_avatar_url)
-                for c in commits
-            ],
-            travis_links=[],
-        )
-
-        for build_env, job_url, sha, sha_idx in db.get_failed_test(name, status):
-            display.status_segment_bar[sha_idx].failed = True
-            display.travis_links.append(SiteTravisLink(sha[:6], build_env, job_url))
-
-        if display.status_segment_bar[0].failed:
-            failed_tests_displays.insert(0, display)
-        else:
-            failed_tests_displays.append(display)
-
-    print("⌛️ Generating Sites")
+    print("⌛️ Writing Out to Frontend")
     with open("js/src/data.json", "w") as f:
-        # TODO: directly dump .to_json()
-        json.dump([d.to_dict() for d in failed_tests_displays], f)
-    # with open("site/template.html.j2") as f:
-    #     template = Template(f.read())
-    # rendered = template.render(
-    #     display=failed_tests_displays, unix_timestamp=str(time.time())
-    # )
-    # with open("site/index.html", "w") as f:
-    #     f.write(rendered)
+        json.dump(data_to_display, f)

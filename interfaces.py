@@ -30,17 +30,18 @@ class TestResult(Mixin):
 class BuildResult(Mixin):
     sha: str
     job_url: str
+    os: str
     build_env: str
     results: List[TestResult]
-
-    sha_index: Optional[int] = None
 
 
 @dataclass
 class SiteTravisLink(Mixin):
     sha_short: str
+    commit_message: str
     build_env: str
     job_url: str
+    os: str
 
 
 @dataclass
@@ -48,6 +49,7 @@ class SiteCommitTooltip(Mixin):
     failed: bool
     message: str
     author_avatar: str
+    commit_url: str
 
 
 @dataclass

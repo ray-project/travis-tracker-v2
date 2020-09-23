@@ -17,21 +17,24 @@ export interface TestResult {
 export interface BuildResult {
     sha: string;
     job_url: string;
+    os: string;
     build_env: string;
     results: Array<TestResult>;
-    sha_index: number | null;
 }
 
 export interface SiteTravisLink {
     sha_short: string;
+    commit_message: string;
     build_env: string;
     job_url: string;
+    os: string;
 }
 
 export interface SiteCommitTooltip {
     failed: boolean;
     message: string;
     author_avatar: string;
+    commit_url: string;
 }
 
 export interface SiteFailedTest {
