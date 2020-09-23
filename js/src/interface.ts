@@ -37,8 +37,20 @@ export interface SiteCommitTooltip {
     commit_url: string;
 }
 
+export interface SiteStatItem {
+    key: string;
+    unit: string;
+    value: number;
+    desired_value: number;
+}
+
 export interface SiteFailedTest {
     name: string;
     status_segment_bar: Array<SiteCommitTooltip>;
     travis_links: Array<SiteTravisLink>;
+}
+
+export interface SiteDisplayRoot {
+    failed_tests: Array<SiteFailedTest>;
+    stats: Array<SiteStatItem>;
 }

@@ -77,8 +77,10 @@ def process_single_build(dir_name) -> BuildResult:
 
 
 class ResultsDB:
-    def __init__(self, location=":memory:") -> None:
+    def __init__(self, location=":memory:", wipe=True) -> None:
         self.table = connect(location)
+        if not wipe:
+            return
         self.table.executescript(
             """
         DROP TABLE IF EXISTS test_result;
@@ -199,6 +201,47 @@ class ResultsDB:
             for _, msg, url, avatar, num_failed in cursor.fetchall()
         ]
 
+    def get_stats(self):
+        master_green_query = """
+            -- Master Green Rate (past 100 commits)
+            SELECT SUM(green)*1.0/COUNT(green)
+            FROM (
+                SELECT SUM(status == 'FAILED') == 0 as green
+                FROM test_result, commits
+                WHERE test_result.sha == commits.sha
+                GROUP BY test_result.sha
+                ORDER BY commits.idx
+            )
+        """
+
+        pass_rate_query = """
+            -- Number of tests with <95% pass rate
+            SELECT COUNT(*)
+            FROM (
+                SELECT test_name, 1 - (SUM(status == 'FAILED') *1.0 / COUNT(*)) AS success_rate
+                FROM test_result, commits
+                WHERE test_result.sha == commits.sha
+                GROUP BY test_name
+                ORDER BY success_rate
+            )
+            WHERE success_rate < 0.95
+        """
+
+        return [
+            SiteStatItem(
+                key="Master Green (past 100 commits)",
+                value=self.table.execute(master_green_query).fetchone()[0] * 100,
+                desired_value=100,
+                unit="%",
+            ),
+            SiteStatItem(
+                key="Number of Tests <95% Pass",
+                value=self.table.execute(pass_rate_query).fetchone()[0],
+                desired_value=0,
+                unit="",
+            ),
+        ]
+
 
 if __name__ == "__main__":
     load_dotenv()
@@ -213,7 +256,8 @@ if __name__ == "__main__":
         download_files_given_prefix(prefix)
 
     print("✍️ Writing Data")
-    db = ResultsDB("./results.db")
+    db = ResultsDB(":memory:")
+    # db = ResultsDB("./results.db", wipe=False)
     db.write_commits(commits)
     db.write_build_results(prefixes)
 
@@ -224,10 +268,11 @@ if __name__ == "__main__":
             name=test_name,
             status_segment_bar=db.get_commit_tooltips(test_name),
             travis_links=db.get_travis_link(test_name),
-        ).to_dict()
+        )
         for test_name, _ in failed_tests
     ]
+    root_display = SiteDisplayRoot(failed_tests=data_to_display, stats=db.get_stats())
 
     print("⌛️ Writing Out to Frontend")
     with open("js/src/data.json", "w") as f:
-        json.dump(data_to_display, f)
+        json.dump(root_display.to_dict(), f)

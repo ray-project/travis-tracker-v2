@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import List, Dict
 from dataclasses import dataclass
 
 from py_ts_interfaces import Interface
@@ -53,7 +53,21 @@ class SiteCommitTooltip(Mixin):
 
 
 @dataclass
+class SiteStatItem(Mixin):
+    key: str
+    unit: str
+    value: float
+    desired_value: float
+
+
+@dataclass
 class SiteFailedTest(Mixin):
     name: str
     status_segment_bar: List[SiteCommitTooltip]
     travis_links: List[SiteTravisLink]
+
+
+@dataclass
+class SiteDisplayRoot(Mixin):
+    failed_tests: List[SiteFailedTest]
+    stats: List[SiteStatItem]

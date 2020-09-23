@@ -5,10 +5,11 @@ import LayoutWrapper from "../components/layout";
 import BuildTimeFooter from "../components/time";
 import Title from "../components/title";
 import TestCase from "../components/case";
-
-import { SiteFailedTest } from "../interface";
+import StatsPane from "../components/stat";
+import { SiteDisplayRoot } from "../interface";
 import rawData from "../data.json";
-const failedTests = rawData as [SiteFailedTest];
+
+const displayData = rawData as SiteDisplayRoot;
 
 export const query = graphql`
   {
@@ -28,7 +29,9 @@ const App: React.FC<PageProps<DataProps>> = ({ data }) => (
   <LayoutWrapper>
     <Title></Title>
 
-    {failedTests.map((c) => (
+    <StatsPane stats={displayData.stats}></StatsPane>
+
+    {displayData.failed_tests.map((c) => (
       <TestCase case={c}></TestCase>
     ))}
 
