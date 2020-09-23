@@ -5,5 +5,5 @@ interface:
 data:
 	python fetch-and-render.py
 
-site: interface, data
+site: interface data
 	cd js; npm ci; npm run build
