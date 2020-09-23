@@ -6,3 +6,4 @@ jinja2
 requests
 typing_extensions
 py-ts-interfaces
+dataclasses-json
