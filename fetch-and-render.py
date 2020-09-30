@@ -54,6 +54,8 @@ def yield_test_result(bazel_log_path):
 
                     name = loaded["id"]["testSummary"]["label"]
                     status = test_summary["overallStatus"]
+                    if status in {"FAILED", "TIMEOUT", "NO_STATUS"}:
+                        status = "FAILED"
                     yield TestResult(name, status)
             except:
                 pass
