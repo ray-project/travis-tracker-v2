@@ -28,9 +28,15 @@ const TestCase: React.FC<Prop> = (props) => {
           <Col>{props.case.name}</Col>
           <Col flex="auto"></Col>
           <Col>
-            <div onClick={() => setShowModal(true)}>
+            <button
+              onClick={() => setShowModal(true)}
+              style={{
+                background: "none",
+                border: "none",
+              }}
+            >
               <BugFilled />
-            </div>
+            </button>
           </Col>
         </Row>
       </div>
