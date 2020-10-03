@@ -24,7 +24,9 @@ const TestCase: React.FC<Prop> = (props) => {
           fontSize: "1.2em",
           width: "100%",
           border: "none",
+          cursor: "pointer",
         }}
+        onClick={() => setShowModal(true)}
       >
         <Row>
           <Col>{props.case.name}</Col>
