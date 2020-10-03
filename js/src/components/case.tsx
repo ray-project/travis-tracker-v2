@@ -13,7 +13,7 @@ const TestCase: React.FC<Prop> = (props) => {
   const [showModal, setShowModal] = useState(false);
   return (
     <>
-      <div
+      <button
         style={{
           backgroundColor: "rgba(247,209,213,0.8)",
           margin: "8px",
@@ -22,24 +22,20 @@ const TestCase: React.FC<Prop> = (props) => {
           paddingLeft: "16px",
           borderRadius: "4px",
           fontSize: "1.2em",
+          width: "100%",
+          border: "none",
+          cursor: "pointer",
         }}
+        onClick={() => setShowModal(true)}
       >
         <Row>
           <Col>{props.case.name}</Col>
           <Col flex="auto"></Col>
           <Col>
-            <button
-              onClick={() => setShowModal(true)}
-              style={{
-                background: "none",
-                border: "none",
-              }}
-            >
-              <BugFilled />
-            </button>
+            <BugFilled />
           </Col>
         </Row>
-      </div>
+      </button>
       <SegmentedBar commits={props.case.status_segment_bar}></SegmentedBar>
       <DetailModal
         visible={showModal}
