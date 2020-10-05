@@ -5,8 +5,8 @@ from pathlib import Path
 from sqlite3 import connect
 from typing import List
 from subprocess import Popen, PIPE
+from datetime import datetime
 
-import boto3
 import requests
 from dotenv import load_dotenv
 from tqdm import tqdm
@@ -24,6 +24,11 @@ def get_latest_commit() -> List[GHCommit]:
     return [
         GHCommit(
             sha=data["sha"],
+            unix_time_s=int(
+                datetime.fromisoformat(
+                    data["commit"]["author"]["date"].replace("Z", "")
+                ).timestamp()
+            ),
             message=data["commit"]["message"].split("\n")[0],
             html_url=data["html_url"],
             author_login=data["author"]["login"],
@@ -98,6 +103,7 @@ class ResultsDB:
         DROP TABLE IF EXISTS commits;
         CREATE TABLE commits (
             sha TEXT,
+            unix_time INT,
             idx INT,
             message TEXT,
             url TEXT,
@@ -108,10 +114,11 @@ class ResultsDB:
 
     def write_commits(self, commits: List[GHCommit]):
         self.table.executemany(
-            "INSERT INTO commits VALUES (?,?,?,?,?)",
+            "INSERT INTO commits VALUES (?,?,?,?,?,?)",
             [
                 (
                     commit.sha,
+                    commit.unix_time_s,
                     i,
                     commit.message,
                     commit.html_url,
@@ -166,7 +173,7 @@ class ResultsDB:
         cursor = self.table.execute(
             """
             -- Travis Link
-            SELECT commits.sha, commits.message, build_env, job_url, os
+            SELECT commits.sha, commits.unix_time, commits.message, build_env, job_url, os
             FROM test_result, commits
             WHERE test_result.sha == commits.sha
             AND status == 'FAILED'
@@ -177,28 +184,37 @@ class ResultsDB:
         )
         return [
             SiteTravisLink(
-                sha_short=sha[:6], commit_message=msg, build_env=env, job_url=url, os=os
+                sha_short=sha[:6],
+                commit_time=unix_time,
+                commit_message=msg,
+                build_env=env,
+                job_url=url,
+                os=os,
             )
-            for sha, msg, env, url, os in cursor.fetchall()
+            for sha, unix_time, msg, env, url, os in cursor.fetchall()
         ]
 
     def get_commit_tooltips(self, test_name: str):
         cursor = self.table.execute(
             """
             -- Commit Tooltip
-            SELECT commits.sha, commits.message, commits.url,
-                   commits.avatar_url, SUM(status == 'FAILED') as num_failed
-            FROM test_result, commits
-            WHERE test_result.sha == commits.sha
-            AND test_name == (?)
-            GROUP BY test_result.sha
+            WITH filtered(sha, num_failed) AS (
+                SELECT sha, SUM(status == 'FAILED') as num_failed
+                FROM test_result
+                WHERE test_name == (?)
+                GROUP BY sha
+            )
+            SELECT commits.sha, commits.message, commits.url, commits.avatar_url,
+                filtered.num_failed
+            FROM commits LEFT JOIN filtered
+            ON commits.sha == filtered.sha
             ORDER BY commits.idx
             """,
             (test_name,),
         )
         return [
             SiteCommitTooltip(
-                failed=num_failed > 0, message=msg, author_avatar=avatar, commit_url=url
+                num_failed=num_failed, message=msg, author_avatar=avatar, commit_url=url
             )
             for _, msg, url, avatar, num_failed in cursor.fetchall()
         ]
@@ -256,10 +272,10 @@ if __name__ == "__main__":
 
     for prefix in tqdm(prefixes):
         download_files_given_prefix(prefix)
+        pass
 
     print("✍️ Writing Data")
-    db = ResultsDB(":memory:")
-    # db = ResultsDB("./results.db", wipe=False)
+    db = ResultsDB("./results.db")
     db.write_commits(commits)
     db.write_build_results(prefixes)
 

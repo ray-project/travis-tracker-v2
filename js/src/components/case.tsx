@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Col, Row } from "antd";
+import { Col, Row, Typography } from "antd";
 import { BugFilled } from "@ant-design/icons";
 import { SiteFailedTest } from "../interface";
 import SegmentedBar from "./segment";
@@ -38,6 +38,7 @@ const TestCase: React.FC<Prop> = (props) => {
       </button>
       <SegmentedBar commits={props.case.status_segment_bar}></SegmentedBar>
       <DetailModal
+        testName={props.case.name}
         visible={showModal}
         links={props.case.travis_links}
         onClose={() => setShowModal(false)}

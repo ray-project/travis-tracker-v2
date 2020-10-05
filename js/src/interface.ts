@@ -3,6 +3,7 @@
 
 export interface GHCommit {
     sha: string;
+    unix_time_s: number;
     message: string;
     html_url: string;
     author_login: string;
@@ -24,6 +25,7 @@ export interface BuildResult {
 
 export interface SiteTravisLink {
     sha_short: string;
+    commit_time: number;
     commit_message: string;
     build_env: string;
     job_url: string;
@@ -31,7 +33,7 @@ export interface SiteTravisLink {
 }
 
 export interface SiteCommitTooltip {
-    failed: boolean;
+    num_failed: number | null;
     message: string;
     author_avatar: string;
     commit_url: string;

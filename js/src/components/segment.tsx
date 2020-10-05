@@ -11,7 +11,14 @@ const SegmentedBar: React.FC<Prop> = ({ commits }) => {
   return (
     <div style={{ display: "flex", width: "90%", margin: "0 auto" }}>
       {commits.map((c) => {
-        const className = c.failed ? "item filled" : "item";
+        let className = "";
+        if (c.num_failed === null) {
+          className = "item not-found";
+        } else if (c.num_failed === 0) {
+          className = "item";
+        } else {
+          className = "item filled";
+        }
 
         return (
           <Tooltip

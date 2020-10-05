@@ -12,3 +12,7 @@
 .filled {
   background-color: #dc3545;
 }
+
+.not-found {
+  background-color: grey;
+}

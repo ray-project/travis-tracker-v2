@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Optional
 from dataclasses import dataclass
 
 from py_ts_interfaces import Interface
@@ -12,6 +12,7 @@ class Mixin(Interface, DataClassJsonMixin):
 @dataclass
 class GHCommit(Mixin):
     sha: str
+    unix_time_s: int
 
     message: str
     html_url: str
@@ -38,6 +39,7 @@ class BuildResult(Mixin):
 @dataclass
 class SiteTravisLink(Mixin):
     sha_short: str
+    commit_time: int
     commit_message: str
     build_env: str
     job_url: str
@@ -46,7 +48,7 @@ class SiteTravisLink(Mixin):
 
 @dataclass
 class SiteCommitTooltip(Mixin):
-    failed: bool
+    num_failed: Optional[int]
     message: str
     author_avatar: str
     commit_url: str
