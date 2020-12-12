@@ -1,8 +1,8 @@
 name: Slackbot Daily Job
 
 on:
-  push:
-    branches: [ master ]
+  # push:
+  #   branches: [ master ]
   schedule:
     # 5pm on weekday UTC -> 9AM pacific time
     - cron: "0 17 * * 1-5"
