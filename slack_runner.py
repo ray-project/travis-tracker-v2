@@ -2,6 +2,7 @@ import os
 import sqlite3
 import requests
 from dotenv import load_dotenv
+import sys
 
 load_dotenv()
 
@@ -20,6 +21,10 @@ ORDER BY failed_count DESC;
 """
     )
 )
+if len(top_failed_tests) == 0:
+    print("No failed cases, skipping.")
+    sys.exit(0)
+
 markdown_lines = ["🚓 Your Flaky Test Report of the Day (posted 9AM each weekday)"]
 for name, count in top_failed_tests:
     markdown_lines.append(f"- `{name}` failed *{count}* times over latest 20 tests.")
