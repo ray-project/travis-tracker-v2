@@ -2,7 +2,7 @@
   height: 16px;
   width: 16px;
   /* border: 1px solid grey; */
-  background-color: #28a745;
+  background-color: rgb(40, 167, 69, 0.8);
   border-radius: 1px;
   margin-right: 1px;
   float: left;
@@ -10,9 +10,9 @@
 }
 
 .filled {
-  background-color: #dc3545;
+  background-color: rgb(220, 53, 69, 0.8);
 }
 
 .not-found {
-  background-color: grey;
+  background-color: rgb(128, 128, 128, 0.8);
 }

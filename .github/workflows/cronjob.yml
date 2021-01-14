@@ -28,6 +28,8 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     - name: Generate site
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         make site
     - name: Upload site

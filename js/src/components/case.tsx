@@ -15,13 +15,14 @@ const TestCase: React.FC<Prop> = (props) => {
     <>
       <button
         style={{
-          backgroundColor: "rgba(247,209,213,0.8)",
+          backgroundColor: "rgba(192,192,192,0.3)",
           margin: "8px",
           marginTop: "16px",
           padding: "8px",
           paddingLeft: "16px",
           borderRadius: "4px",
           fontSize: "1.2em",
+          textAlign: "left",
           width: "100%",
           border: "none",
           cursor: "pointer",

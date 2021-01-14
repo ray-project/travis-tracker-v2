@@ -6,6 +6,7 @@ from sqlite3 import connect
 from typing import List
 from subprocess import Popen, PIPE
 from datetime import datetime
+from dataclasses_json.api import dataclass_json
 
 import requests
 from dotenv import load_dotenv
@@ -13,10 +14,15 @@ from tqdm import tqdm
 
 from interfaces import *
 
+load_dotenv()
+
+GH_HEADERS = {"Authorization": f"token {os.environ['GITHUB_TOKEN']}"}
+
 
 def get_latest_commit() -> List[GHCommit]:
     resp = requests.get(
-        "https://api.github.com/repos/ray-project/ray/commits?per_page=100"
+        "https://api.github.com/repos/ray-project/ray/commits?per_page=100",
+        headers=GH_HEADERS,
     )
     assert resp.status_code == 200, "Pinging github API /commits failed"
     json_data = resp.json()
@@ -36,6 +42,72 @@ def get_latest_commit() -> List[GHCommit]:
         )
         for data in json_data
     ]
+
+
+@dataclass_json
+@dataclass
+class TravisJobStat:
+    job_id: int
+    os: str
+    commit: str
+    env: str
+    state: str
+    url: str
+
+
+def get_travis_status(commit_sha, cache_dir="travis_events") -> List[TravisJobStat]:
+    def find_travis_build_id(sha):
+        data = requests.get(
+            f"https://api.github.com/repos/ray-project/ray/commits/{sha}/check-suites",
+            headers=GH_HEADERS,
+        ).json()
+        for check in data["check_suites"]:
+            slug = check["app"]["slug"]
+            if slug == "travis-ci":
+                data = requests.get(check["check_runs_url"], headers=GH_HEADERS).json()
+                return data["check_runs"][0]["external_id"]
+
+    def list_travis_job_status(build_id):
+        resp = requests.get(
+            f"https://api.travis-ci.com/build/{build_id}?include=job.config,job.state",
+            headers={"Travis-API-Version": "3"},
+        ).json()
+        data = []
+        for job in resp["jobs"]:
+            data.append(
+                TravisJobStat(
+                    job_id=job["id"],
+                    os=job["config"]["os"],
+                    commit=resp["commit"]["sha"],
+                    env=job["config"]["env"],
+                    state=job["state"],
+                    url=f"https://travis-ci.com/github/ray-project/ray/jobs/{job['id']}",
+                )
+            )
+        return data
+
+    dir_name = Path(cache_dir) / commit_sha
+    os.makedirs(dir_name, exist_ok=True)
+
+    status_file = dir_name / "status_complete"
+    data_file = dir_name / "status.json"
+    if not status_file.exists():
+        build_id = find_travis_build_id(commit_sha)
+        if build_id is None:
+            return []
+        job_status = list_travis_job_status(build_id)
+
+        with open(data_file, "w") as f:
+            f.write(TravisJobStat.schema().dumps(job_status, many=True))
+
+        job_states = {job.state for job in job_status}
+        if len(job_states.intersection({"created", "started"})) == 0:
+            status_file.touch()
+
+    if data_file.exists():
+        with open(data_file) as f:
+            return TravisJobStat.schema().loads(f.read(), many=True)
+    return []
 
 
 def download_files_given_prefix(prefix: str):
@@ -64,6 +136,16 @@ def yield_test_result(bazel_log_path):
                     yield TestResult(name, status)
             except:
                 pass
+
+
+TRAVIS_TO_BAZEL_STATUS_MAP = {
+    "created": None,
+    "errored": "FAILED",
+    "failed": "FAILED",
+    "passed": "PASSED",
+    "started": None,
+    "received": None,
+}
 
 
 def process_single_build(dir_name) -> BuildResult:
@@ -97,6 +179,7 @@ class ResultsDB:
             build_env TEXT,
             os TEXT,
             job_url TEXT,
+            job_id INT,
             sha TEXT
         );
 
@@ -138,6 +221,7 @@ class ResultsDB:
             for build in os.listdir(prefix):
                 dir_name = Path(prefix) / build
                 build_result = process_single_build(dir_name)
+                travis_job_id = int(build)
                 for test in build_result.results:
                     records_to_insert.append(
                         (
@@ -146,12 +230,44 @@ class ResultsDB:
                             build_result.build_env,
                             build_result.os,
                             build_result.job_url,
+                            travis_job_id,
                             build_result.sha,
                         )
                     )
 
         self.table.executemany(
-            "INSERT INTO test_result VALUES (?,?,?,?,?,?)",
+            "INSERT INTO test_result VALUES (?,?,?,?,?,?,?)",
+            records_to_insert,
+        )
+        self.table.commit()
+
+    def write_travis_data(self, travis_data: List[List[TravisJobStat]]):
+        records_to_insert = []
+        for data in tqdm(travis_data):
+            for travis_commit in data:
+                travis_job_id = travis_commit.job_id
+                num_result = len(
+                    self.table.execute(
+                        f"SELECT * FROM test_result WHERE job_id == {travis_job_id}"
+                    ).fetchall()
+                )
+                status = TRAVIS_TO_BAZEL_STATUS_MAP[travis_commit.state]
+                if num_result == 0 and status is not None:
+                    records_to_insert.append(
+                        (
+                            f"travis://{travis_commit.os}/{travis_commit.env}".replace(
+                                "PYTHONWARNINGS=ignore", ""
+                            ),
+                            status,
+                            travis_commit.env,
+                            travis_commit.os,
+                            travis_commit.url,
+                            travis_commit.job_id,
+                            travis_commit.commit,
+                        )
+                    )
+        self.table.executemany(
+            "INSERT INTO test_result VALUES (?,?,?,?,?,?,?)",
             records_to_insert,
         )
         self.table.commit()
@@ -262,8 +378,6 @@ class ResultsDB:
 
 
 if __name__ == "__main__":
-    load_dotenv()
-
     print("🐙 Fetching Commits from Github")
     commits = get_latest_commit()
 
@@ -274,10 +388,14 @@ if __name__ == "__main__":
         download_files_given_prefix(prefix)
         pass
 
+    print("Downloading Travis Status")
+    travis_data = [get_travis_status(commit.sha) for commit in tqdm(commits)]
+
     print("✍️ Writing Data")
     db = ResultsDB("./results.db")
     db.write_commits(commits)
     db.write_build_results(prefixes)
+    db.write_travis_data(travis_data)
 
     print("🔮 Analyzing Data")
     failed_tests = db.list_failed_tests_ordered()

@@ -1,5 +1,6 @@
 .env
 bazel_events
+travis_events
 results.db
 
 .vscode/
