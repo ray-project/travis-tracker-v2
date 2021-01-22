@@ -38,5 +38,5 @@ jobs:
     - name: Post slack notification
       env:
         SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-        run: |
-          python slack_fail_runner.py
+      run: |
+        python slack_fail_runner.py
