@@ -35,4 +35,4 @@ jobs:
       env:
         SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
       run: |
-        python slack_runner.py
+        python slack_flaky_runner.py
