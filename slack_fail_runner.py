@@ -3,6 +3,19 @@ import sqlite3
 import requests
 from dotenv import load_dotenv
 import sys
+from datetime import datetime
+import pytz
+
+current_time_pacific = (
+    datetime.utcnow()
+    .replace(tzinfo=pytz.utc)
+    .astimezone(pytz.timezone("America/Los_Angeles"))
+)
+
+if not ((9 <= current_time_pacific.hour < 5) and (current_time_pacific.weekday() < 5)):
+    print("Not in US pacific working hours, skipping...")
+    sys.exit(0)
+
 
 load_dotenv()
 
@@ -29,7 +42,7 @@ for name, count in failed_tests:
     markdown_lines.append(f"- `{name}` failed *{count}* times over latest 5 commits")
 markdown_lines.append("Go to https://flakey-tests.ray.io/ to view Travis links")
 slack_url = os.environ["SLACK_WEBHOOK"]
-slack_channnel = os.environ.get("SLACK_CHANNEL_OVERRIDE", "#open-source")
+slack_channnel = os.environ.get("SLACK_CHANNEL_OVERRIDE", "#oss-test-cop")
 
 resp = requests.post(
     slack_url,

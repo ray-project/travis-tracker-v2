@@ -7,3 +7,4 @@ requests
 typing_extensions
 py-ts-interfaces
 dataclasses-json
+pytz
