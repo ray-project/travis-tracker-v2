@@ -14,7 +14,7 @@ SELECT test_name, COUNT(*) as failed_count
 FROM test_result, commits
 WHERE test_result.sha == commits.sha
   AND status == 'FAILED'
-  AND commits.idx < 5
+  AND commits.idx < 4
 GROUP BY test_name
   HAVING COUNT(*) >= 3
 """
@@ -26,7 +26,7 @@ if len(failed_tests) == 0:
 
 markdown_lines = ["🚧 Your Failing Test Report"]
 for name, count in failed_tests:
-    markdown_lines.append(f"- `{name}` failed *{count}* times over latest 5 "
+    markdown_lines.append(f"- `{name}` failed *{count}* times over latest 4 "
                           f"tests.")
 markdown_lines.append("Go to https://flakey-tests.ray.io/ to view Travis links")
 slack_url = os.environ["SLACK_WEBHOOK"]
