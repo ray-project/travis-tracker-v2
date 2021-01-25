@@ -12,7 +12,7 @@ current_time_pacific = (
     .astimezone(pytz.timezone("America/Los_Angeles"))
 )
 
-if not ((9 <= current_time_pacific.hour < 5) and (current_time_pacific.weekday() < 5)):
+if not ((9 <= current_time_pacific.hour < 17) and (current_time_pacific.weekday() < 5)):
     print("Not in US pacific working hours, skipping...")
     sys.exit(0)
 
