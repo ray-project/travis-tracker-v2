@@ -225,7 +225,7 @@ class ResultsDB:
                 for test in build_result.results:
                     records_to_insert.append(
                         (
-                            test.test_name,
+                            f"{build_result.os}:{test.test_name}",
                             test.status,
                             build_result.build_env,
                             build_result.os,
@@ -255,7 +255,7 @@ class ResultsDB:
                 if num_result == 0 and status is not None:
                     records_to_insert.append(
                         (
-                            f"travis://{travis_commit.os}/{travis_commit.env}".replace(
+                            f"{travis_commit.os}://travis/{travis_commit.env}".replace(
                                 "PYTHONWARNINGS=ignore", ""
                             ),
                             status,
