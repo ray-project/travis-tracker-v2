@@ -7,6 +7,7 @@ import DetailModal from "./detail";
 
 interface Prop {
   case: SiteFailedTest;
+  segmentBarColorType: string;
 }
 
 const TestCase: React.FC<Prop> = (props) => {
@@ -37,7 +38,10 @@ const TestCase: React.FC<Prop> = (props) => {
           </Col>
         </Row>
       </button>
-      <SegmentedBar commits={props.case.status_segment_bar}></SegmentedBar>
+      <SegmentedBar
+        commits={props.case.status_segment_bar}
+        segmentBarColorType={props.segmentBarColorType}
+      ></SegmentedBar>
       <DetailModal
         testName={props.case.name}
         visible={showModal}

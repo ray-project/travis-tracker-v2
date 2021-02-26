@@ -272,31 +272,36 @@ class ResultsDB:
         )
         self.table.commit()
 
-    def list_failed_tests_ordered(self):
+    def list_tests_ordered(self, status: str):
+        assert status in {"FAILED", "FLAKY"}
         cursor = self.table.execute(
-            """
+            f"""
             SELECT test_name, SUM(100 - commits.idx) as weight
             FROM test_result, commits
             WHERE test_result.sha == commits.sha
-            AND status == 'FAILED'
+            AND status == (?)
             GROUP BY test_name
             ORDER BY weight DESC;
         """,
+            (status,),
         )
         return cursor.fetchall()
 
-    def get_travis_link(self, test_name: str):
+    def get_travis_link(self, test_name: str, status: str):
         cursor = self.table.execute(
             """
             -- Travis Link
             SELECT commits.sha, commits.unix_time, commits.message, build_env, job_url, os
             FROM test_result, commits
             WHERE test_result.sha == commits.sha
-            AND status == 'FAILED'
+            AND status == (?)
             AND test_name == (?)
             ORDER BY commits.idx
             """,
-            (test_name,),
+            (
+                status,
+                test_name,
+            ),
         )
         return [
             SiteTravisLink(
@@ -310,12 +315,12 @@ class ResultsDB:
             for sha, unix_time, msg, env, url, os in cursor.fetchall()
         ]
 
-    def get_commit_tooltips(self, test_name: str):
+    def get_commit_tooltips(self, test_name: str, status: str):
         cursor = self.table.execute(
             """
             -- Commit Tooltip
             WITH filtered(sha, num_failed) AS (
-                SELECT sha, SUM(status == 'FAILED') as num_failed
+                SELECT sha, SUM(status == (?)) as num_failed
                 FROM test_result
                 WHERE test_name == (?)
                 GROUP BY sha
@@ -326,7 +331,10 @@ class ResultsDB:
             ON commits.sha == filtered.sha
             ORDER BY commits.idx
             """,
-            (test_name,),
+            (
+                status,
+                test_name,
+            ),
         )
         return [
             SiteCommitTooltip(
@@ -398,16 +406,23 @@ if __name__ == "__main__":
     db.write_travis_data(travis_data)
 
     print("🔮 Analyzing Data")
-    failed_tests = db.list_failed_tests_ordered()
-    data_to_display = [
-        SiteFailedTest(
-            name=test_name,
-            status_segment_bar=db.get_commit_tooltips(test_name),
-            travis_links=db.get_travis_link(test_name),
-        )
-        for test_name, _ in failed_tests
-    ]
-    root_display = SiteDisplayRoot(failed_tests=data_to_display, stats=db.get_stats())
+    display = dict()
+    for status in ["FAILED", "FLAKY"]:
+        failed_tests = db.list_tests_ordered(status)
+        data_to_display = [
+            SiteFailedTest(
+                name=test_name,
+                status_segment_bar=db.get_commit_tooltips(test_name, status),
+                travis_links=db.get_travis_link(test_name, status),
+            )
+            for test_name, _ in failed_tests
+        ]
+        display[status] = data_to_display
+    root_display = SiteDisplayRoot(
+        failed_tests=display["FAILED"],
+        flaky_tests=display["FLAKY"],
+        stats=db.get_stats(),
+    )
 
     print("⌛️ Writing Out to Frontend")
     with open("js/src/data.json", "w") as f:

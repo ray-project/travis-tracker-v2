@@ -72,4 +72,5 @@ class SiteFailedTest(Mixin):
 @dataclass
 class SiteDisplayRoot(Mixin):
     failed_tests: List[SiteFailedTest]
+    flaky_tests: List[SiteFailedTest]
     stats: List[SiteStatItem]

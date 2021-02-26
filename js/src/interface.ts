@@ -54,5 +54,6 @@ export interface SiteFailedTest {
 
 export interface SiteDisplayRoot {
     failed_tests: Array<SiteFailedTest>;
+    flaky_tests: Array<SiteFailedTest>;
     stats: Array<SiteStatItem>;
 }
