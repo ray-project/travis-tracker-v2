@@ -288,7 +288,7 @@ class ResultsDB:
             FROM test_result, commits
             WHERE test_result.sha == commits.sha
             AND status == 'FAILED'
-            AND commits.idx < 5
+            AND commits.idx < 10
             GROUP BY test_name
         """).fetchall()
 

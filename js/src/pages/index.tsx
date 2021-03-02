@@ -35,10 +35,6 @@ const App: React.FC<PageProps<DataProps>> = ({ data }) => {
 
       <StatsPane stats={displayData.stats}></StatsPane>
 
-      {displayData.failed_tests.map((c) => (
-        <TestCase case={c} segmentBarColorType={"failed"}></TestCase>
-      ))}
-
       {showAll
         ? displayData.failed_tests.map((c) => (
             <TestCase case={c}></TestCase>
@@ -59,7 +55,7 @@ const App: React.FC<PageProps<DataProps>> = ({ data }) => {
         >
           {showAll
             ? "Hide additional tests"
-            : `Show all flaky tests (${numHidden} hidden, it will take ~2s to load) `}
+            : `Show all failed tests (${numHidden} hidden, it will take ~2s to load) `}
         </Button>
       )}
 
