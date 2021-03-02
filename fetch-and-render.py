@@ -1,5 +1,7 @@
+import argparse
 from collections import defaultdict
 import json
+import glob
 import os
 from itertools import chain
 from pathlib import Path
@@ -401,12 +403,11 @@ class ResultsDB:
         ]
 
 
-import argparse
-
 def get_args():
     p = argparse.ArgumentParser(add_help=False)
     p.add_argument("--bazel-cached", action="store_true")
     return p.parse_args()
+
 
 if __name__ == "__main__":
 
@@ -415,8 +416,7 @@ if __name__ == "__main__":
 
     args = get_args()
     if args.bazel_cached:
-        import glob
-        print("💻 Using file cache from S3!")
+        print("💻 Using local file cache for bazel events!")
         prefixes = glob.glob("bazel_events/master/*")
     else:
         print("💻 Downloading Files from S3")
