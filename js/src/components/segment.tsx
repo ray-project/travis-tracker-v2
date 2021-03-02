@@ -14,13 +14,10 @@ const SegmentedBar: React.FC<Prop> = ({ commits }) => {
         let className = "";
         if (c.num_failed === null) {
           className = "item not-found";
-        } else if (c.num_failed === 0) {
-          if (c.num_flaky === 0) {
-            className = "item";
-          } else {
-            className = `item flaky`;
-
-          }
+        } else if (c.num_failed === 0 && c.num_flaky === 0) {
+          className = "item";
+        } else if (c.num_flaky > 0) {
+          className = `item flaky`;
         } else {
           className = `item failed`;
         }

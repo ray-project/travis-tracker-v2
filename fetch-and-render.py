@@ -285,14 +285,16 @@ class ResultsDB:
         """
         failed_tests = self.table.execute(query, ("FAILED",)).fetchall()
         flaky_tests = self.table.execute(query, ("FLAKY",)).fetchall()
-        top_failed_tests = self.table.execute("""
+        top_failed_tests = self.table.execute(
+            """
             SELECT test_name, SUM(100 - commits.idx) as weight
             FROM test_result, commits
             WHERE test_result.sha == commits.sha
             AND status == 'FAILED'
             AND commits.idx < 10
             GROUP BY test_name
-        """).fetchall()
+        """
+        ).fetchall()
 
         prioritization = defaultdict(int)
         for test_name, score in top_failed_tests:
@@ -317,9 +319,7 @@ class ResultsDB:
             AND test_name == (?)
             ORDER BY commits.idx
             """,
-            (
-                test_name,
-            ),
+            (test_name,),
         )
         return [
             SiteTravisLink(
@@ -349,14 +349,15 @@ class ResultsDB:
             ON commits.sha == filtered.sha
             ORDER BY commits.idx
             """,
-            (
-                test_name,
-            ),
+            (test_name,),
         )
         return [
             SiteCommitTooltip(
                 num_failed=num_failed,
-                num_flaky=num_flaky, message=msg, author_avatar=avatar, commit_url=url
+                num_flaky=num_flaky,
+                message=msg,
+                author_avatar=avatar,
+                commit_url=url,
             )
             for _, msg, url, avatar, num_failed, num_flaky in cursor.fetchall()
         ]
