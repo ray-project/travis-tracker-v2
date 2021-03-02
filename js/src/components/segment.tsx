@@ -5,20 +5,21 @@ import "./segment.css";
 
 interface Prop {
   commits: Array<SiteCommitTooltip>;
-  segmentBarColorType: string;
 }
 
-const SegmentedBar: React.FC<Prop> = ({ commits, segmentBarColorType }) => {
+const SegmentedBar: React.FC<Prop> = ({ commits }) => {
   return (
     <div style={{ display: "flex", width: "90%", margin: "0 auto" }}>
       {commits.map((c) => {
         let className = "";
         if (c.num_failed === null) {
           className = "item not-found";
-        } else if (c.num_failed === 0) {
+        } else if (c.num_failed === 0 && c.num_flaky === 0) {
           className = "item";
+        } else if (c.num_flaky > 0) {
+          className = `item flaky`;
         } else {
-          className = `item ${segmentBarColorType}`;
+          className = `item failed`;
         }
 
         return (

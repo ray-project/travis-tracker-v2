@@ -49,6 +49,7 @@ class SiteTravisLink(Mixin):
 @dataclass
 class SiteCommitTooltip(Mixin):
     num_failed: Optional[int]
+    num_flaky: Optional[int]
     message: str
     author_avatar: str
     commit_url: str
@@ -72,5 +73,4 @@ class SiteFailedTest(Mixin):
 @dataclass
 class SiteDisplayRoot(Mixin):
     failed_tests: List[SiteFailedTest]
-    flaky_tests: List[SiteFailedTest]
     stats: List[SiteStatItem]
