@@ -34,6 +34,7 @@ export interface SiteTravisLink {
 
 export interface SiteCommitTooltip {
     num_failed: number | null;
+    num_flaky: number | null;
     message: string;
     author_avatar: string;
     commit_url: string;
@@ -54,6 +55,5 @@ export interface SiteFailedTest {
 
 export interface SiteDisplayRoot {
     failed_tests: Array<SiteFailedTest>;
-    flaky_tests: Array<SiteFailedTest>;
     stats: Array<SiteStatItem>;
 }

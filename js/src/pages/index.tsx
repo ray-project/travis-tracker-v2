@@ -27,8 +27,8 @@ type DataProps = {
 };
 
 const App: React.FC<PageProps<DataProps>> = ({ data }) => {
-  const [showFlaky, setShowFlaky] = useState<boolean>(false);
-  const numHidden = displayData.flaky_tests.length - 20;
+  const [showAll, setShowAll] = useState<boolean>(false);
+  const numHidden = displayData.failed_tests.length - 100;
   return (
     <LayoutWrapper>
       <Title></Title>
@@ -39,14 +39,14 @@ const App: React.FC<PageProps<DataProps>> = ({ data }) => {
         <TestCase case={c} segmentBarColorType={"failed"}></TestCase>
       ))}
 
-      {showFlaky
-        ? displayData.flaky_tests.map((c) => (
-            <TestCase case={c} segmentBarColorType={"flaky"}></TestCase>
+      {showAll
+        ? displayData.failed_tests.map((c) => (
+            <TestCase case={c}></TestCase>
           ))
-        : displayData.flaky_tests
-            .slice(0, 20)
+        : displayData.failed_tests
+            .slice(0, 100)
             .map((c) => (
-              <TestCase case={c} segmentBarColorType={"flaky"}></TestCase>
+              <TestCase case={c}></TestCase>
             ))}
 
       {numHidden > 0 && (
@@ -54,10 +54,10 @@ const App: React.FC<PageProps<DataProps>> = ({ data }) => {
           style={{ margin: "12px" }}
           type={"primary"}
           onClick={() => {
-            setShowFlaky((val) => !val);
+            setShowAll((val) => !val);
           }}
         >
-          {showFlaky
+          {showAll
             ? "Hide additional tests"
             : `Show all flaky tests (${numHidden} hidden, it will take ~2s to load) `}
         </Button>

@@ -1,3 +1,4 @@
+from collections import defaultdict
 import json
 import os
 from itertools import chain
@@ -272,34 +273,49 @@ class ResultsDB:
         )
         self.table.commit()
 
-    def list_tests_ordered(self, status: str):
-        assert status in {"FAILED", "FLAKY"}
-        cursor = self.table.execute(
-            f"""
+    def list_tests_ordered(self):
+        query = f"""
             SELECT test_name, SUM(100 - commits.idx) as weight
             FROM test_result, commits
             WHERE test_result.sha == commits.sha
             AND status == (?)
             GROUP BY test_name
-            ORDER BY weight DESC;
-        """,
-            (status,),
-        )
-        return cursor.fetchall()
+        """
+        failed_tests = self.table.execute(query, ("FAILED",)).fetchall()
+        flaky_tests = self.table.execute(query, ("FLAKY",)).fetchall()
+        top_failed_tests = self.table.execute("""
+            SELECT test_name, SUM(100 - commits.idx) as weight
+            FROM test_result, commits
+            WHERE test_result.sha == commits.sha
+            AND status == 'FAILED'
+            AND commits.idx < 5
+            GROUP BY test_name
+        """).fetchall()
 
-    def get_travis_link(self, test_name: str, status: str):
+        prioritization = defaultdict(int)
+        for test_name, score in top_failed_tests:
+            prioritization[test_name] += score * 2
+
+        for test_name, score in failed_tests:
+            prioritization[test_name] += score
+
+        for test_name, score in flaky_tests:
+            prioritization[test_name] += 0.1 * score
+        results = sorted(list(prioritization.items()), key=lambda kv: -kv[1])
+        return results
+
+    def get_travis_link(self, test_name: str):
         cursor = self.table.execute(
             """
             -- Travis Link
             SELECT commits.sha, commits.unix_time, commits.message, build_env, job_url, os
             FROM test_result, commits
             WHERE test_result.sha == commits.sha
-            AND status == (?)
+            AND status == 'FAILED'
             AND test_name == (?)
             ORDER BY commits.idx
             """,
             (
-                status,
                 test_name,
             ),
         )
@@ -315,32 +331,32 @@ class ResultsDB:
             for sha, unix_time, msg, env, url, os in cursor.fetchall()
         ]
 
-    def get_commit_tooltips(self, test_name: str, status: str):
+    def get_commit_tooltips(self, test_name: str):
         cursor = self.table.execute(
             """
             -- Commit Tooltip
-            WITH filtered(sha, num_failed) AS (
-                SELECT sha, SUM(status == (?)) as num_failed
+            WITH filtered(sha, num_failed, num_flaky) AS (
+                SELECT sha, SUM(status == 'FAILED'), SUM(status == 'FLAKY') as num_failed
                 FROM test_result
                 WHERE test_name == (?)
                 GROUP BY sha
             )
             SELECT commits.sha, commits.message, commits.url, commits.avatar_url,
-                filtered.num_failed
+                filtered.num_failed, filtered.num_flaky
             FROM commits LEFT JOIN filtered
             ON commits.sha == filtered.sha
             ORDER BY commits.idx
             """,
             (
-                status,
                 test_name,
             ),
         )
         return [
             SiteCommitTooltip(
-                num_failed=num_failed, message=msg, author_avatar=avatar, commit_url=url
+                num_failed=num_failed,
+                num_flaky=num_flaky, message=msg, author_avatar=avatar, commit_url=url
             )
-            for _, msg, url, avatar, num_failed in cursor.fetchall()
+            for _, msg, url, avatar, num_failed, num_flaky in cursor.fetchall()
         ]
 
     def get_stats(self):
@@ -385,16 +401,30 @@ class ResultsDB:
         ]
 
 
+import argparse
+
+def get_args():
+    p = argparse.ArgumentParser(add_help=False)
+    p.add_argument("--bazel-cached", action="store_true")
+    return p.parse_args()
+
 if __name__ == "__main__":
+
     print("🐙 Fetching Commits from Github")
     commits = get_latest_commit()
 
-    print("💻 Downloading Files from S3")
-    prefixes = [f"bazel_events/master/{commit.sha}" for commit in commits]
+    args = get_args()
+    if args.bazel_cached:
+        import glob
+        print("💻 Using file cache from S3!")
+        prefixes = glob.glob("bazel_events/master/*")
+    else:
+        print("💻 Downloading Files from S3")
+        prefixes = [f"bazel_events/master/{commit.sha}" for commit in commits]
 
-    for prefix in tqdm(prefixes):
-        download_files_given_prefix(prefix)
-        pass
+        for prefix in tqdm(prefixes):
+            download_files_given_prefix(prefix)
+            pass
 
     print("Downloading Travis Status")
     travis_data = [get_travis_status(commit.sha) for commit in tqdm(commits)]
@@ -407,20 +437,17 @@ if __name__ == "__main__":
 
     print("🔮 Analyzing Data")
     display = dict()
-    for status in ["FAILED", "FLAKY"]:
-        failed_tests = db.list_tests_ordered(status)
-        data_to_display = [
-            SiteFailedTest(
-                name=test_name,
-                status_segment_bar=db.get_commit_tooltips(test_name, status),
-                travis_links=db.get_travis_link(test_name, status),
-            )
-            for test_name, _ in failed_tests
-        ]
-        display[status] = data_to_display
+    failed_tests = db.list_tests_ordered()
+    data_to_display = [
+        SiteFailedTest(
+            name=test_name,
+            status_segment_bar=db.get_commit_tooltips(test_name),
+            travis_links=db.get_travis_link(test_name),
+        )
+        for test_name, _ in failed_tests
+    ]
     root_display = SiteDisplayRoot(
-        failed_tests=display["FAILED"],
-        flaky_tests=display["FLAKY"],
+        failed_tests=data_to_display,
         stats=db.get_stats(),
     )
 
