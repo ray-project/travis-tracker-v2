@@ -35,7 +35,7 @@ GROUP BY test_name
 """
     )
 )
-failed_docker_builds = check_recent_commits_have_docker_build
+failed_docker_builds = check_recent_commits_have_docker_build()
 if len(failed_tests) == 0 and len(failed_docker_builds) == 0:
     print("No failed cases, skipping.")
     sys.exit(0)

@@ -77,6 +77,7 @@ def check_recent_commits_have_docker_build() -> List[str]:
     # are only built per commit (e.g. there may be no images built for 
     # 48 hours over a weekend if there are no commits).
     sha, commit_time = find_commit_of_age(MAX_TIME_FOR_DOCKER_BUILD)
+    sha = sha[:6]
     all_images =  check_last_updated_for_repo("ray")
     all_images.update(check_last_updated_for_repo("ray-ml"))
     failed = []
