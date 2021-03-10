@@ -15,14 +15,20 @@ PYTHON_VERSIONS = ["py36", "py37", "py38"]
 
 
 def get_most_recent_layer(tag_resp: Dict[str, Any]) -> datetime:
-    # First index is the newest
+    """
+    Find the time of the most recently created layer of a given image.
+    """
     dates = []
     for layer in tag_resp["history"]:
         layer_json = json.loads(layer["v1Compatibility"])
         dates.append(date_parser(layer_json["created"]).replace(tzinfo=pytz.utc))
     return max(dates)
 
-def fetch_manifest(image_name: str, tag: str, token: str) -> datetime:
+def fetch_manifest_time(image_name: str, tag: str, token: str) -> datetime:
+    """
+    Fetches the manifest of the provided `image_name`:`tag` and returns the time
+    it was created.
+    """
     manifest_url = f"https://registry.hub.docker.com/v2/rayproject/{image_name}/manifests/{tag}"
     manifest_resp = requests.get(manifest_url,headers={"Authorization": f"Bearer {token}"})
     assert manifest_resp.ok
@@ -31,6 +37,10 @@ def fetch_manifest(image_name: str, tag: str, token: str) -> datetime:
 
 
 def check_last_updated_for_repo(image_name: str, tag_prefix="nightly") -> Dict[str, datetime]:
+    """
+    Returns a mapping from `image_name`:`tag` to time of creation. This looks through
+    ARCH_VERSIONS and PYTHON_VERSIONS to generate all possible tags.
+    """
     token_url = f"https://auth.docker.io/token?service=registry.docker.io&scope=repository:rayproject/{image_name}:pull"
     token_resp = requests.get(token_url)
     assert token_resp.ok
@@ -41,17 +51,20 @@ def check_last_updated_for_repo(image_name: str, tag_prefix="nightly") -> Dict[s
         for py_version in PYTHON_VERSIONS:
             for arch in ARCH_VERSIONS:
                 tag = f"{tag_prefix}-{py_version}{arch}"
-                results[f"{image_name}/{tag}"] = executor.submit(fetch_manifest, image_name, tag, token)
+                results[f"{image_name}/{tag}"] = executor.submit(fetch_manifest_time, image_name, tag, token)
     
     for tag, fut in results.items():
         results[tag] = fut.result()
     return results
 
 def find_commit_of_age(age=timedelta(hours=4)) -> Tuple[str, datetime]:
-    # UTC Time
+    """
+    Finds the first commit that was made at least `age` time before now.
+    """
     recent_commits = get_latest_commit()
     now = datetime.now(tz=pytz.utc)
     for commit in recent_commits:
+        # GitHub commits use UTC time
         created_at = datetime.fromtimestamp(commit.unix_time_s, tz=pytz.utc)
         if (now - age) > created_at:
             return (commit.sha, created_at)
@@ -59,6 +72,10 @@ def find_commit_of_age(age=timedelta(hours=4)) -> Tuple[str, datetime]:
 
 
 def check_recent_commits_have_docker_build() -> List[str]:
+    # We want to choose a commit that is old enough to have a completed
+    # Docker build. We need to tie this to a commit because Docker images
+    # are only built per commit (e.g. there may be no images built for 
+    # 48 hours over a weekend if there are no commits).
     sha, commit_time = find_commit_of_age(MAX_TIME_FOR_DOCKER_BUILD)
     all_images =  check_last_updated_for_repo("ray")
     all_images.update(check_last_updated_for_repo("ray-ml"))
