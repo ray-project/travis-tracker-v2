@@ -11,7 +11,7 @@ from fetch_and_render import get_latest_commit
 ARCH_VERSIONS = ["-cpu", "-gpu", ""]
 IMAGES_TO_CHECK = ["ray", "ray-ml"]
 MAX_TIME_FOR_DOCKER_BUILD = timedelta(hours=3)
-PYTHON_VERSIONS = ["py36", "py37", "py38"]
+PYTHON_VERSIONS = ["-py36", "-py37", "-py38", ""]
 
 
 def get_most_recent_layer(tag_resp: Dict[str, Any]) -> datetime:
@@ -50,7 +50,7 @@ def check_last_updated_for_repo(image_name: str, tag_prefix="nightly") -> Dict[s
     with concurrent.futures.ThreadPoolExecutor() as executor:
         for py_version in PYTHON_VERSIONS:
             for arch in ARCH_VERSIONS:
-                tag = f"{tag_prefix}-{py_version}{arch}"
+                tag = f"{tag_prefix}{py_version}{arch}"
                 results[f"{image_name}/{tag}"] = executor.submit(fetch_manifest_time, image_name, tag, token)
     
     for tag, fut in results.items():
