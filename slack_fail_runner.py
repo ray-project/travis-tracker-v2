@@ -6,6 +6,8 @@ import sys
 from datetime import datetime
 import pytz
 
+from docker_checker import check_recent_commits_have_docker_build
+
 current_time_pacific = (
     datetime.utcnow()
     .replace(tzinfo=pytz.utc)
@@ -33,14 +35,19 @@ GROUP BY test_name
 """
     )
 )
-if len(failed_tests) == 0:
+failed_docker_builds = check_recent_commits_have_docker_build()
+if len(failed_tests) == 0 and len(failed_docker_builds) == 0:
     print("No failed cases, skipping.")
     sys.exit(0)
 
-markdown_lines = ["🚧 Your Failing Test Report"]
-for name, count in failed_tests:
-    markdown_lines.append(f"- `{name}` failed *{count}* times over latest 5 commits")
-markdown_lines.append("Go to https://flakey-tests.ray.io/ to view Travis links")
+markdown_lines = []
+if len(failed_tests) != 0
+    markdown_lines.append("🚧 Your Failing Test Report")
+    for name, count in failed_tests:
+        markdown_lines.append(f"- `{name}` failed *{count}* times over latest 5 commits")
+    markdown_lines.append("Go to https://flakey-tests.ray.io/ to view Travis links")
+
+markdown_lines.extend(failed_docker_builds)
 slack_url = os.environ["SLACK_WEBHOOK"]
 slack_channnel = os.environ.get("SLACK_CHANNEL_OVERRIDE", "#oss-test-cop")
 
