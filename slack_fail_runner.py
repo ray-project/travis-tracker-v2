@@ -41,7 +41,7 @@ if len(failed_tests) == 0 and len(failed_docker_builds) == 0:
     sys.exit(0)
 
 markdown_lines = []
-if len(failed_tests) != 0
+if len(failed_tests) != 0:
     markdown_lines.append("🚧 Your Failing Test Report")
     for name, count in failed_tests:
         markdown_lines.append(f"- `{name}` failed *{count}* times over latest 5 commits")
