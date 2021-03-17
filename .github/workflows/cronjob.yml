@@ -37,6 +37,7 @@ jobs:
         aws s3 cp --recursive js/public s3://ray-travis-site
     - name: Post slack notification
       env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
       run: |
         python slack_fail_runner.py
