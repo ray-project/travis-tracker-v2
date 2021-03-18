@@ -143,6 +143,7 @@ def yield_test_result(bazel_log_path):
 
 TRAVIS_TO_BAZEL_STATUS_MAP = {
     "created": None,
+    "queued": None,
     "errored": "FAILED",
     "failed": "FAILED",
     "passed": "PASSED",
