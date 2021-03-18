@@ -254,7 +254,7 @@ class ResultsDB:
                         f"SELECT * FROM test_result WHERE job_id == {travis_job_id}"
                     ).fetchall()
                 )
-                status = TRAVIS_TO_BAZEL_STATUS_MAP[travis_commit.state]
+                status = TRAVIS_TO_BAZEL_STATUS_MAP.get(travis_commit.state)
                 if num_result == 0 and status is not None:
                     records_to_insert.append(
                         (
