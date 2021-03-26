@@ -288,7 +288,7 @@ class ResultsDB:
         flaky_tests = self.table.execute(query, ("FLAKY",)).fetchall()
         top_failed_tests = self.table.execute(
             """
-            SELECT test_name, SUM(100 - commits.idx) as weight
+            SELECT test_name, SUM(10 - commits.idx) as weight
             FROM test_result, commits
             WHERE test_result.sha == commits.sha
             AND status == 'FAILED'
@@ -299,7 +299,7 @@ class ResultsDB:
 
         prioritization = defaultdict(int)
         for test_name, score in top_failed_tests:
-            prioritization[test_name] += score * 2
+            prioritization[test_name] += score * 1_000_000  # Prioritize recent failure.
 
         for test_name, score in failed_tests:
             prioritization[test_name] += score
