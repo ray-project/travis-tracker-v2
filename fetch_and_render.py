@@ -68,6 +68,10 @@ def get_travis_status(commit_sha, cache_dir="travis_events") -> List[TravisJobSt
             slug = check["app"]["slug"]
             if slug == "travis-ci":
                 data = requests.get(check["check_runs_url"], headers=GH_HEADERS).json()
+                if (
+                    len(data["check_runs"]) == 0
+                ):  # Travis added the check but not runs yet.
+                    return None
                 return data["check_runs"][0]["external_id"]
 
     def list_travis_job_status(build_id):
