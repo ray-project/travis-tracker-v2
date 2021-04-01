@@ -5,9 +5,10 @@ import "./segment.css";
 
 interface Prop {
   commits: Array<SiteCommitTooltip>;
+  prefix: string;
 }
 
-const SegmentedBar: React.FC<Prop> = ({ commits }) => {
+const SegmentedBar: React.FC<Prop> = ({ commits, prefix }) => {
   return (
     <div style={{ display: "flex", width: "90%", margin: "0 auto" }}>
       {commits.map((c) => {
@@ -32,7 +33,9 @@ const SegmentedBar: React.FC<Prop> = ({ commits }) => {
                   height="16px"
                   style={{ paddingRight: "8px" }}
                 />
-                <a href={c.commit_url}>{c.message}</a>
+                <a href={c.commit_url}>
+                  {prefix} {c.message}
+                </a>
               </p>
             }
           >

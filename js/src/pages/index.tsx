@@ -28,6 +28,7 @@ type DataProps = {
 
 const App: React.FC<PageProps<DataProps>> = ({ data }) => {
   const [showAll, setShowAll] = useState<boolean>(false);
+  const [compactMode, setCompactMode] = useState<boolean>(false);
   const numHidden = displayData.failed_tests.length - 100;
   return (
     <LayoutWrapper>
@@ -35,15 +36,21 @@ const App: React.FC<PageProps<DataProps>> = ({ data }) => {
 
       <StatsPane stats={displayData.stats}></StatsPane>
 
+      <Button
+        style={{ margin: "12px" }}
+        type={"primary"}
+        onClick={() => setCompactMode((val) => !val)}
+      >
+        Toggle Compact Mode
+      </Button>
+
       {showAll
         ? displayData.failed_tests.map((c) => (
-            <TestCase case={c}></TestCase>
+            <TestCase case={c} compact={compactMode}></TestCase>
           ))
         : displayData.failed_tests
             .slice(0, 100)
-            .map((c) => (
-              <TestCase case={c}></TestCase>
-            ))}
+            .map((c) => <TestCase case={c} compact={compactMode}></TestCase>)}
 
       {numHidden > 0 && (
         <Button
