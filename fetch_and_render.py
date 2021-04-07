@@ -64,6 +64,10 @@ def get_travis_status(commit_sha, cache_dir="travis_events") -> List[TravisJobSt
             f"https://api.github.com/repos/ray-project/ray/commits/{sha}/check-suites",
             headers=GH_HEADERS,
         ).json()
+
+        if "check_suites" not in data:
+            return
+
         for check in data["check_suites"]:
             slug = check["app"]["slug"]
             if slug == "travis-ci":
