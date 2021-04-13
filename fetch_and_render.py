@@ -50,7 +50,7 @@ def get_latest_commit() -> List[GHCommit]:
 @dataclass_json
 @dataclass
 class TravisJobStat:
-    job_id: int
+    job_id: str
     os: str
     commit: str
     env: str
@@ -191,7 +191,7 @@ class ResultsDB:
             build_env TEXT,
             os TEXT,
             job_url TEXT,
-            job_id INT,
+            job_id TEXT,
             sha TEXT
         );
 
@@ -233,7 +233,7 @@ class ResultsDB:
             for build in os.listdir(prefix):
                 dir_name = Path(prefix) / build
                 build_result = process_single_build(dir_name)
-                travis_job_id = int(build)
+                travis_job_id = build
                 for test in build_result.results:
                     records_to_insert.append(
                         (
@@ -260,7 +260,8 @@ class ResultsDB:
                 travis_job_id = travis_commit.job_id
                 num_result = len(
                     self.table.execute(
-                        f"SELECT * FROM test_result WHERE job_id == {travis_job_id}"
+                        f"SELECT * FROM test_result WHERE job_id == (?)",
+                        (travis_job_id,),
                     ).fetchall()
                 )
                 status = TRAVIS_TO_BAZEL_STATUS_MAP.get(travis_commit.state)
