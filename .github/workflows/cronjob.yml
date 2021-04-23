@@ -53,6 +53,9 @@ jobs:
         SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
       run: |
         python slack_fail_runner.py
+    - name: Run slow test stats
+      run: |
+        cat slow_tests.sql | sqlite3 results.db
     - name: Catch Failures
       if: ${{ failure() }}
       env:
