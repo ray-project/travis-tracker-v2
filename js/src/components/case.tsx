@@ -44,6 +44,12 @@ const TestCase: React.FC<Prop> = (props) => {
           <Row>
             <Col>{props.case.name}</Col>
             <Col flex="auto"></Col>
+
+            {props.case.build_time_stats && (
+              // Median build time
+              <Col span={3}>⏱{props.case.build_time_stats[1].toFixed(2)}s</Col>
+            )}
+
             <Col span={3}>
               <div className="item failed" style={{ marginTop: "3px" }}></div>
               {getRate(props.case, (t) => t.num_failed || 0).toFixed(0)}%
@@ -57,6 +63,7 @@ const TestCase: React.FC<Prop> = (props) => {
               ).toFixed(0)}
               %
             </Col>
+
             <Col>
               <BugFilled />
             </Col>

@@ -13,6 +13,7 @@ export interface GHCommit {
 export interface TestResult {
     test_name: string;
     status: string;
+    total_duration_s: number;
 }
 
 export interface BuildResult {
@@ -51,6 +52,7 @@ export interface SiteFailedTest {
     name: string;
     status_segment_bar: Array<SiteCommitTooltip>;
     travis_links: Array<SiteTravisLink>;
+    build_time_stats: Array<number> | null;
 }
 
 export interface SiteDisplayRoot {

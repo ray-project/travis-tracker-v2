@@ -6,7 +6,7 @@ import os
 from itertools import chain
 from pathlib import Path
 from sqlite3 import connect
-from typing import List
+from typing import List, Tuple
 from subprocess import Popen, PIPE
 from datetime import datetime
 from dataclasses_json.api import dataclass_json
@@ -14,6 +14,8 @@ from dataclasses_json.api import dataclass_json
 import requests
 from dotenv import load_dotenv
 from tqdm import tqdm
+import numpy as np
+import pandas as pd
 
 from interfaces import *
 
@@ -56,6 +58,7 @@ class TravisJobStat:
     env: str
     state: str
     url: str
+    duration_s: str
 
 
 def get_travis_status(commit_sha, cache_dir="travis_events") -> List[TravisJobStat]:
@@ -80,11 +83,18 @@ def get_travis_status(commit_sha, cache_dir="travis_events") -> List[TravisJobSt
 
     def list_travis_job_status(build_id):
         resp = requests.get(
-            f"https://api.travis-ci.com/build/{build_id}?include=job.config,job.state",
+            f"https://api.travis-ci.com/build/{build_id}?include=job.config,job.state,job.started_at,job.finished_at",
             headers={"Travis-API-Version": "3"},
         ).json()
         data = []
         for job in resp["jobs"]:
+            started = pd.to_datetime(job["started_at"])
+            finished = pd.to_datetime(job["finished_at"])
+            if started is None or finished is None:
+                duration_s = 0
+            else:
+                duration_s = (finished - started).total_seconds()
+
             data.append(
                 TravisJobStat(
                     job_id=job["id"],
@@ -93,6 +103,7 @@ def get_travis_status(commit_sha, cache_dir="travis_events") -> List[TravisJobSt
                     env=job["config"]["env"],
                     state=job["state"],
                     url=f"https://travis-ci.com/github/ray-project/ray/jobs/{job['id']}",
+                    duration_s=duration_s,
                 )
             )
         return data
@@ -144,8 +155,10 @@ def yield_test_result(bazel_log_path):
                     status = test_summary["overallStatus"]
                     if status in {"FAILED", "TIMEOUT", "NO_STATUS"}:
                         status = "FAILED"
-                    yield TestResult(name, status)
-            except:
+                    duration_s = float(test_summary["totalRunDurationMillis"]) / 1e3
+                    yield TestResult(name, status, duration_s)
+            except Exception as e:
+                print(e)
                 pass
 
 
@@ -192,7 +205,8 @@ class ResultsDB:
             os TEXT,
             job_url TEXT,
             job_id TEXT,
-            sha TEXT
+            sha TEXT,
+            test_duration_s REAL
         );
 
         DROP TABLE IF EXISTS commits;
@@ -244,11 +258,12 @@ class ResultsDB:
                             build_result.job_url,
                             travis_job_id,
                             build_result.sha,
+                            test.total_duration_s,
                         )
                     )
 
         self.table.executemany(
-            "INSERT INTO test_result VALUES (?,?,?,?,?,?,?)",
+            "INSERT INTO test_result VALUES (?,?,?,?,?,?,?,?)",
             records_to_insert,
         )
         self.table.commit()
@@ -265,22 +280,24 @@ class ResultsDB:
                     ).fetchall()
                 )
                 status = TRAVIS_TO_BAZEL_STATUS_MAP.get(travis_commit.state)
-                if num_result == 0 and status is not None:
+                if status is not None:
                     records_to_insert.append(
                         (
                             f"{travis_commit.os}://travis/{travis_commit.env}".replace(
                                 "PYTHONWARNINGS=ignore", ""
                             ),
-                            status,
+                            # Mark the entire build passed when individual tests result uploaded
+                            status if num_result == 0 else "PASSED",
                             travis_commit.env,
                             travis_commit.os,
                             travis_commit.url,
                             travis_commit.job_id,
                             travis_commit.commit,
+                            travis_commit.duration_s,
                         )
                     )
         self.table.executemany(
-            "INSERT INTO test_result VALUES (?,?,?,?,?,?,?)",
+            "INSERT INTO test_result VALUES (?,?,?,?,?,?,?,?)",
             records_to_insert,
         )
         self.table.commit()
@@ -342,6 +359,24 @@ class ResultsDB:
             )
             for sha, unix_time, msg, env, url, os in cursor.fetchall()
         ]
+
+    def get_recent_build_time_stats(self, test_name: str) -> Optional[List[float]]:
+        cursor = self.table.execute(
+            """
+            -- Build Time Stats
+            SELECT test_duration_s
+            FROM test_result, commits
+            WHERE test_result.sha == commits.sha
+            AND commits.idx <= 20
+            AND test_name == (?)
+            """,
+            (test_name,),
+        )
+        arr = np.array(list(cursor)).flatten()
+        if len(arr) == 0:
+            return None
+        runtime_stat = np.percentile(arr, [0, 50, 90]).tolist()
+        return runtime_stat
 
     def get_commit_tooltips(self, test_name: str):
         cursor = self.table.execute(
@@ -454,6 +489,7 @@ if __name__ == "__main__":
             name=test_name,
             status_segment_bar=db.get_commit_tooltips(test_name),
             travis_links=db.get_travis_link(test_name),
+            build_time_stats=db.get_recent_build_time_stats(test_name),
         )
         for test_name, _ in failed_tests
     ]

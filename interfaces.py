@@ -25,6 +25,7 @@ class GHCommit(Mixin):
 class TestResult(Mixin):
     test_name: str
     status: str
+    total_duration_s: float
 
 
 @dataclass
@@ -68,6 +69,7 @@ class SiteFailedTest(Mixin):
     name: str
     status_segment_bar: List[SiteCommitTooltip]
     travis_links: List[SiteTravisLink]
+    build_time_stats: Optional[List[float]]
 
 
 @dataclass
