@@ -31,7 +31,7 @@ def fetch_manifest_time(image_name: str, tag: str, token: str) -> datetime:
     """
     manifest_url = f"https://registry.hub.docker.com/v2/rayproject/{image_name}/manifests/{tag}"
     manifest_resp = requests.get(manifest_url,headers={"Authorization": f"Bearer {token}"})
-    assert manifest_resp.ok
+    assert manifest_resp.ok, f"Status: {manifest_resp.status_code}\nBody: {manifest_resp.text}"
     return get_most_recent_layer(manifest_resp.json())
     
 
