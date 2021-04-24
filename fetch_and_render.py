@@ -144,22 +144,28 @@ def download_files_given_prefix(prefix: str):
 
 
 def yield_test_result(bazel_log_path):
+    # Gather the known flaky set
+    flaky_tests = set()
     with open(bazel_log_path) as f:
         for line in f:
-            try:
-                loaded = json.loads(line)
-                if "testSummary" in loaded:
-                    test_summary = loaded["testSummary"]
+            loaded = json.loads(line)
+            if "targetConfigured" in loaded["id"] and "tag" in loaded["configured"]:
+                test_name = loaded["id"]["targetConfigured"]["label"]
+                if "flaky" in loaded["configured"]["tag"]:
+                    flaky_tests.add(test_name)
 
-                    name = loaded["id"]["testSummary"]["label"]
-                    status = test_summary["overallStatus"]
-                    if status in {"FAILED", "TIMEOUT", "NO_STATUS"}:
-                        status = "FAILED"
-                    duration_s = float(test_summary["totalRunDurationMillis"]) / 1e3
-                    yield TestResult(name, status, duration_s)
-            except Exception as e:
-                print(e)
-                pass
+    with open(bazel_log_path) as f:
+        for line in f:
+            loaded = json.loads(line)
+            if "testSummary" in loaded:
+                test_summary = loaded["testSummary"]
+
+                name = loaded["id"]["testSummary"]["label"]
+                status = test_summary["overallStatus"]
+                if status in {"FAILED", "TIMEOUT", "NO_STATUS"}:
+                    status = "FAILED"
+                duration_s = float(test_summary["totalRunDurationMillis"]) / 1e3
+                yield TestResult(name, status, duration_s, name in flaky_tests)
 
 
 TRAVIS_TO_BAZEL_STATUS_MAP = {
@@ -206,7 +212,8 @@ class ResultsDB:
             job_url TEXT,
             job_id TEXT,
             sha TEXT,
-            test_duration_s REAL
+            test_duration_s REAL,
+            is_labeled_flaky BOOLEAN
         );
 
         DROP TABLE IF EXISTS commits;
@@ -259,11 +266,12 @@ class ResultsDB:
                             travis_job_id,
                             build_result.sha,
                             test.total_duration_s,
+                            test.is_labeled_flaky,
                         )
                     )
 
         self.table.executemany(
-            "INSERT INTO test_result VALUES (?,?,?,?,?,?,?,?)",
+            "INSERT INTO test_result VALUES (?,?,?,?,?,?,?,?,?)",
             records_to_insert,
         )
         self.table.commit()
@@ -294,10 +302,11 @@ class ResultsDB:
                             travis_commit.job_id,
                             travis_commit.commit,
                             travis_commit.duration_s,
+                            False,  # is_labeled_flaky
                         )
                     )
         self.table.executemany(
-            "INSERT INTO test_result VALUES (?,?,?,?,?,?,?,?)",
+            "INSERT INTO test_result VALUES (?,?,?,?,?,?,?,?,?)",
             records_to_insert,
         )
         self.table.commit()
@@ -378,6 +387,13 @@ class ResultsDB:
         runtime_stat = np.percentile(arr, [0, 50, 90]).tolist()
         return runtime_stat
 
+    def get_marked_flaky_status(self, test_name: str) -> bool:
+        cursor = self.table.execute(
+            "SELECT SUM(is_labeled_flaky) FROM test_result WHERE test_name == (?)",
+            (test_name,),
+        )
+        return bool(list(cursor)[0][0])
+
     def get_commit_tooltips(self, test_name: str):
         cursor = self.table.execute(
             """
@@ -420,6 +436,19 @@ class ResultsDB:
             )
         """
 
+        master_green_without_flaky_query = """
+            -- Master Green Rate (past 100 commits) (without flaky tests)
+            SELECT SUM(green)*1.0/COUNT(green)
+            FROM (
+                SELECT SUM(status == 'FAILED') == 0 as green
+                FROM test_result, commits
+                WHERE test_result.sha == commits.sha
+                  AND test_result.is_labeled_flaky == 0
+                GROUP BY commits.sha
+                ORDER BY commits.idx
+            )
+        """
+
         pass_rate_query = """
             -- Number of tests with <95% pass rate
             SELECT COUNT(*)
@@ -437,6 +466,13 @@ class ResultsDB:
             SiteStatItem(
                 key="Master Green (past 100 commits)",
                 value=self.table.execute(master_green_query).fetchone()[0] * 100,
+                desired_value=100,
+                unit="%",
+            ),
+            SiteStatItem(
+                key="Master Green (without flaky tests)",
+                value=self.table.execute(master_green_without_flaky_query).fetchone()[0]
+                * 100,
                 desired_value=100,
                 unit="%",
             ),
@@ -490,6 +526,7 @@ if __name__ == "__main__":
             status_segment_bar=db.get_commit_tooltips(test_name),
             travis_links=db.get_travis_link(test_name),
             build_time_stats=db.get_recent_build_time_stats(test_name),
+            is_labeled_flaky=db.get_marked_flaky_status(test_name),
         )
         for test_name, _ in failed_tests
     ]

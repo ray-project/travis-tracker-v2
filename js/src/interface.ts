@@ -14,6 +14,7 @@ export interface TestResult {
     test_name: string;
     status: string;
     total_duration_s: number;
+    is_labeled_flaky: boolean;
 }
 
 export interface BuildResult {
@@ -53,6 +54,7 @@ export interface SiteFailedTest {
     status_segment_bar: Array<SiteCommitTooltip>;
     travis_links: Array<SiteTravisLink>;
     build_time_stats: Array<number> | null;
+    is_labeled_flaky: boolean;
 }
 
 export interface SiteDisplayRoot {

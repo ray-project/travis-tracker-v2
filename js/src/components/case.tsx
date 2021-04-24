@@ -45,6 +45,8 @@ const TestCase: React.FC<Prop> = (props) => {
             <Col>{props.case.name}</Col>
             <Col flex="auto"></Col>
 
+            {props.case.is_labeled_flaky && <Col span={2}>❆</Col>}
+
             {props.case.build_time_stats && (
               // Median build time
               <Col span={3}>⏱{props.case.build_time_stats[1].toFixed(2)}s</Col>
