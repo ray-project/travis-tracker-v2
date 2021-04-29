@@ -331,6 +331,16 @@ class ResultsDB:
             GROUP BY test_name
         """
         ).fetchall()
+        green_flaky_tests = self.table.execute(
+            """
+            SELECT test_name, SUM(100 - commits.idx) as weight
+            FROM test_result, commits
+            WHERE test_result.sha == commits.sha
+              AND status == 'PASSED'
+              AND is_labeled_flaky = 1
+            GROUP BY test_name
+        """
+        ).fetchall()
 
         prioritization = defaultdict(int)
         for test_name, score in top_failed_tests:
@@ -339,8 +349,12 @@ class ResultsDB:
         for test_name, score in failed_tests:
             prioritization[test_name] += score
 
+        for test_name, score in green_flaky_tests:
+            prioritization[test_name] += 0.5 * score
+
         for test_name, score in flaky_tests:
             prioritization[test_name] += 0.1 * score
+
         results = sorted(list(prioritization.items()), key=lambda kv: -kv[1])
         return results
 
