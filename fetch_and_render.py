@@ -22,6 +22,17 @@ from interfaces import *
 load_dotenv()
 
 GH_HEADERS = {"Authorization": f"token {os.environ['GITHUB_TOKEN']}"}
+BUILDKITE_TOKEN = os.environ["BUILDKITE_TOKEN"]
+
+
+def _parse_duration(started_at, finished_at) -> int:
+    started = pd.to_datetime(started_at)
+    finished = pd.to_datetime(finished_at)
+    if started is None or finished is None:
+        duration_s = 0
+    else:
+        duration_s = (finished - started).total_seconds()
+    return duration_s
 
 
 def get_latest_commit() -> List[GHCommit]:
@@ -88,12 +99,7 @@ def get_travis_status(commit_sha, cache_dir="travis_events") -> List[TravisJobSt
         ).json()
         data = []
         for job in resp["jobs"]:
-            started = pd.to_datetime(job["started_at"])
-            finished = pd.to_datetime(job["finished_at"])
-            if started is None or finished is None:
-                duration_s = 0
-            else:
-                duration_s = (finished - started).total_seconds()
+            duration_s = _parse_duration(job["started_at"], job["finished_at"])
 
             data.append(
                 TravisJobStat(
@@ -130,6 +136,79 @@ def get_travis_status(commit_sha, cache_dir="travis_events") -> List[TravisJobSt
         with open(data_file) as f:
             return TravisJobStat.schema().loads(f.read(), many=True)
     return []
+
+
+@dataclass
+class BuildkiteStatus:
+    job_id: str
+    label: str
+    passed: bool  # if it's running, passed=false
+    state: str
+    url: str
+    commit: str
+    created_at: Optional[str]
+    finished_at: Optional[str]
+
+    def get_duration_s(self) -> int:
+        return _parse_duration(self.created_at, self.finished_at)
+
+
+def get_buildkite_status() -> List[BuildkiteStatus]:
+    resp = requests.post(
+        "https://graphql.buildkite.com/v1",
+        headers={"Authorization": f"Bearer {BUILDKITE_TOKEN}"},
+        json={
+            "query": """
+query AllPipelinesQuery {
+  pipeline(slug: "ray-project/ray-builders-branch") {
+    builds(branch: "master", first: 120) {
+      edges {
+        node {
+          jobs(first: 100) {
+            edges {
+              node {
+                ... on JobTypeCommand {
+                  id
+                  label
+                  passed
+                  state
+                  url
+                  build {
+                    commit
+                  }
+                  createdAt
+                  finishedAt
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    builds = resp.json()["data"]["pipeline"]["builds"]["edges"]
+    results = []
+    for build in builds:
+        jobs = build["node"]["jobs"]["edges"]
+        for job in jobs:
+            actual_job = job["node"]
+            status = BuildkiteStatus(
+                job_id=actual_job["id"],
+                label=actual_job["label"],
+                passed=actual_job["passed"],
+                state=actual_job["state"],
+                url=actual_job["url"],
+                commit=actual_job["build"]["commit"],
+                created_at=actual_job["createdAt"],
+                finished_at=actual_job["finishedAt"],
+            )
+            results.append(status)
+    return results
 
 
 def download_files_given_prefix(prefix: str):
@@ -270,6 +349,37 @@ class ResultsDB:
                         )
                     )
 
+        self.table.executemany(
+            "INSERT INTO test_result VALUES (?,?,?,?,?,?,?,?,?)",
+            records_to_insert,
+        )
+        self.table.commit()
+
+    def write_buildkite_data(self, buildkite_data: List[BuildkiteStatus]):
+        records_to_insert = []
+        for job in buildkite_data:
+            num_result = len(
+                self.table.execute(
+                    f"SELECT * FROM test_result WHERE job_id == (?)",
+                    (job.job_id,),
+                ).fetchall()
+            )
+            status = "PASSED" if job.passed else "FAILED"
+            if job.state == "FINISHED":
+                records_to_insert.append(
+                    (
+                        f"bk://{job.label}",
+                        # Mark the entire build passed when individual tests result uploaded
+                        status if num_result == 0 else "PASSED",
+                        job.label,
+                        "linux",
+                        job.url,
+                        job.job_id,
+                        job.commit,
+                        job.get_duration_s(),
+                        False,  # is_labeled_flaky
+                    )
+                )
         self.table.executemany(
             "INSERT INTO test_result VALUES (?,?,?,?,?,?,?,?,?)",
             records_to_insert,
@@ -530,6 +640,8 @@ if __name__ == "__main__":
     db.write_commits(commits)
     db.write_build_results(prefixes)
     db.write_travis_data(travis_data)
+    # TODO(simon): Cache this?
+    db.write_buildkite_data(get_buildkite_status())
 
     print("🔮 Analyzing Data")
     display = dict()
