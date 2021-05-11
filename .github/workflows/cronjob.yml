@@ -42,6 +42,7 @@ jobs:
     - name: Generate site
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        BUILDKITE_TOKEN: ${{ secrets.BUILDKITE_TOKEN }}
       run: |
         make site
     - name: Upload site

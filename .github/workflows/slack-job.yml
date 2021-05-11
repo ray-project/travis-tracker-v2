@@ -43,6 +43,7 @@ jobs:
     - name: Generate data
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        BUILDKITE_TOKEN: ${{ secrets.BUILDKITE_TOKEN }}
       run: |
         make data
     - name: Post slack notification
