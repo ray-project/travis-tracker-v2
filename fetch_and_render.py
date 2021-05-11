@@ -22,7 +22,6 @@ from interfaces import *
 load_dotenv()
 
 GH_HEADERS = {"Authorization": f"token {os.environ['GITHUB_TOKEN']}"}
-BUILDKITE_TOKEN = os.environ["BUILDKITE_TOKEN"]
 
 
 def _parse_duration(started_at, finished_at) -> int:
@@ -154,6 +153,7 @@ class BuildkiteStatus:
 
 
 def get_buildkite_status() -> List[BuildkiteStatus]:
+    BUILDKITE_TOKEN = os.environ["BUILDKITE_TOKEN"]
     resp = requests.post(
         "https://graphql.buildkite.com/v1",
         headers={"Authorization": f"Bearer {BUILDKITE_TOKEN}"},
