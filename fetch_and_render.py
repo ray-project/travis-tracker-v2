@@ -459,8 +459,8 @@ class ResultsDB:
         for test_name, score in failed_tests:
             prioritization[test_name] += score
 
-        for test_name, score in green_flaky_tests:
-            prioritization[test_name] += 0.5 * score
+        # for test_name, score in green_flaky_tests:
+        #     prioritization[test_name] += 0.5 * score
 
         for test_name, score in flaky_tests:
             prioritization[test_name] += 0.1 * score
