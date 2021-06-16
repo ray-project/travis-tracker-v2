@@ -168,7 +168,7 @@ query AllPipelinesQuery {
             edges {
               node {
                 ... on JobTypeCommand {
-                  id
+                  uuid
                   label
                   passed
                   state
@@ -178,6 +178,14 @@ query AllPipelinesQuery {
                   }
                   createdAt
                   finishedAt
+                  artifacts(first: 100) {
+                    edges {
+                      node {
+                        downloadURL
+                        path
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -197,17 +205,38 @@ query AllPipelinesQuery {
         jobs = build["node"]["jobs"]["edges"]
         for job in jobs:
             actual_job = job["node"]
+            job_id = actual_job["uuid"]
+            sha = actual_job["build"]["commit"]
             status = BuildkiteStatus(
-                job_id=actual_job["id"],
+                job_id=job_id,
                 label=actual_job["label"],
                 passed=actual_job["passed"],
                 state=actual_job["state"],
                 url=actual_job["url"],
-                commit=actual_job["build"]["commit"],
+                commit=sha,
                 created_at=actual_job["createdAt"],
                 finished_at=actual_job["finishedAt"],
             )
             results.append(status)
+
+            artifacts = actual_job["artifacts"]["edges"]
+            for artifact in artifacts:
+                url = artifact["node"]["downloadURL"]
+                path = artifact["node"]["path"]
+                filename = os.path.split(path)[1]
+                on_disk_path = f"bazel_events/master/{sha}/{job_id}/{filename}"
+                if not os.path.exists(on_disk_path):
+                    # Use the artifact link to download the logs. This might not work well
+                    # on slower internet because the link is presigned S3 url and only last 10min.
+                    resp = requests.get(url)
+                    assert (
+                        resp.status_code == 200
+                    ), f"failed to download {url} for {actual_job}"
+                    if len(resp.content):
+                        # Make the directory, just to be safe.
+                        os.makedirs(os.path.split(on_disk_path)[0], exist_ok=True)
+                        with open(on_disk_path, "wb") as f:
+                            f.write(resp.content)
     return results
 
 
@@ -634,6 +663,7 @@ if __name__ == "__main__":
 
     print("Downloading Travis Status")
     travis_data = [get_travis_status(commit.sha) for commit in tqdm(commits)]
+    buildkite_status = get_buildkite_status()
 
     print("✍️ Writing Data")
     db = ResultsDB("./results.db")
@@ -641,7 +671,7 @@ if __name__ == "__main__":
     db.write_build_results(prefixes)
     db.write_travis_data(travis_data)
     # TODO(simon): Cache this?
-    db.write_buildkite_data(get_buildkite_status())
+    db.write_buildkite_data(buildkite_status)
 
     print("🔮 Analyzing Data")
     display = dict()
