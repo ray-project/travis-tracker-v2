@@ -25,6 +25,8 @@ class GHCommit(Mixin):
 class TestResult(Mixin):
     test_name: str
     status: str
+    total_duration_s: float
+    is_labeled_flaky: bool
 
 
 @dataclass
@@ -49,6 +51,7 @@ class SiteTravisLink(Mixin):
 @dataclass
 class SiteCommitTooltip(Mixin):
     num_failed: Optional[int]
+    num_flaky: Optional[int]
     message: str
     author_avatar: str
     commit_url: str
@@ -67,6 +70,8 @@ class SiteFailedTest(Mixin):
     name: str
     status_segment_bar: List[SiteCommitTooltip]
     travis_links: List[SiteTravisLink]
+    build_time_stats: Optional[List[float]]
+    is_labeled_flaky: bool
 
 
 @dataclass

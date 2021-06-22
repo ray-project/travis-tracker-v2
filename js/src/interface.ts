@@ -13,6 +13,8 @@ export interface GHCommit {
 export interface TestResult {
     test_name: string;
     status: string;
+    total_duration_s: number;
+    is_labeled_flaky: boolean;
 }
 
 export interface BuildResult {
@@ -34,6 +36,7 @@ export interface SiteTravisLink {
 
 export interface SiteCommitTooltip {
     num_failed: number | null;
+    num_flaky: number | null;
     message: string;
     author_avatar: string;
     commit_url: string;
@@ -50,6 +53,8 @@ export interface SiteFailedTest {
     name: string;
     status_segment_bar: Array<SiteCommitTooltip>;
     travis_links: Array<SiteTravisLink>;
+    build_time_stats: Array<number> | null;
+    is_labeled_flaky: boolean;
 }
 
 export interface SiteDisplayRoot {

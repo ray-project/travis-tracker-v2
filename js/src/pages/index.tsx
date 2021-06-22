@@ -1,5 +1,6 @@
 import { graphql, PageProps } from "gatsby";
-import React from "react";
+import React, { useState } from "react";
+import { Button } from "antd";
 
 import LayoutWrapper from "../components/layout";
 import BuildTimeFooter from "../components/time";
@@ -25,20 +26,51 @@ type DataProps = {
   };
 };
 
-const App: React.FC<PageProps<DataProps>> = ({ data }) => (
-  <LayoutWrapper>
-    <Title></Title>
+const App: React.FC<PageProps<DataProps>> = ({ data }) => {
+  const [showAll, setShowAll] = useState<boolean>(false);
+  const [compactMode, setCompactMode] = useState<boolean>(false);
+  const numHidden = displayData.failed_tests.length - 100;
+  return (
+    <LayoutWrapper>
+      <Title></Title>
 
-    <StatsPane stats={displayData.stats}></StatsPane>
+      <StatsPane stats={displayData.stats}></StatsPane>
 
-    {displayData.failed_tests.map((c) => (
-      <TestCase case={c}></TestCase>
-    ))}
+      <Button
+        style={{ margin: "12px" }}
+        type={"primary"}
+        onClick={() => setCompactMode((val) => !val)}
+      >
+        Toggle Compact Mode
+      </Button>
 
-    <BuildTimeFooter
-      buildTime={Date.parse(data.site.buildTime)}
-    ></BuildTimeFooter>
-  </LayoutWrapper>
-);
+      {showAll
+        ? displayData.failed_tests.map((c) => (
+            <TestCase case={c} compact={compactMode}></TestCase>
+          ))
+        : displayData.failed_tests
+            .slice(0, 100)
+            .map((c) => <TestCase case={c} compact={compactMode}></TestCase>)}
+
+      {numHidden > 0 && (
+        <Button
+          style={{ margin: "12px" }}
+          type={"primary"}
+          onClick={() => {
+            setShowAll((val) => !val);
+          }}
+        >
+          {showAll
+            ? "Hide additional tests"
+            : `Show all failed tests (${numHidden} hidden, it will take ~2s to load) `}
+        </Button>
+      )}
+
+      <BuildTimeFooter
+        buildTime={Date.parse(data.site.buildTime)}
+      ></BuildTimeFooter>
+    </LayoutWrapper>
+  );
+};
 
 export default App;

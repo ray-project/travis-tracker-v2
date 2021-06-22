@@ -3,7 +3,7 @@ interface:
 	sed -i.bak "s/^interface/export interface/g" js/src/interface.ts
 
 data:
-	python fetch-and-render.py
+	python fetch_and_render.py
 
 site: interface data
 	cd js; yarn; yarn build

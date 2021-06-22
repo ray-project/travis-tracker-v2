@@ -31,6 +31,35 @@ resource "aws_s3_bucket_public_access_block" "logs" {
   restrict_public_buckets = true
 }
 
+# This allow the buildkite builders (in a different account) to put objects in the
+# logs.
+resource "aws_s3_bucket_policy" "logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Id": "Policy1513129229074",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "arn:aws:iam::029272617770:role/ray_wheels_bucket_access"
+            },
+            "Action": [
+                "s3:PutObject",
+                "s3:PutObjectAcl"
+            ],
+            "Resource": [
+                "${aws_s3_bucket.logs.arn}",
+                "${aws_s3_bucket.logs.arn}/*"
+            ]
+        }
+    ]
+}
+EOF
+}
+
 
 # Website Bucket
 

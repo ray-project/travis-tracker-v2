@@ -9,8 +9,12 @@
   display: block;
 }
 
-.filled {
+.failed {
   background-color: rgb(220, 53, 69, 0.8);
+}
+
+.flaky {
+  background-color: rgb(250, 218, 94, 0.8);
 }
 
 .not-found {
