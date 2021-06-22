@@ -3,6 +3,7 @@ boto3==1.14.50
 dataclasses
 tqdm
 jinja2
+mypy==0.902
 requests
 typing_extensions
 py-ts-interfaces
