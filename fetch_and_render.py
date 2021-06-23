@@ -154,35 +154,39 @@ class BuildkiteStatus:
 
 def get_buildkite_status() -> List[BuildkiteStatus]:
     BUILDKITE_TOKEN = os.environ["BUILDKITE_TOKEN"]
-    resp = requests.post(
-        "https://graphql.buildkite.com/v1",
-        headers={"Authorization": f"Bearer {BUILDKITE_TOKEN}"},
-        json={
-            "query": """
-query AllPipelinesQuery {
-  pipeline(slug: "ray-project/ray-builders-branch") {
-    builds(branch: "master", first: 120) {
-      edges {
-        node {
-          jobs(first: 100) {
-            edges {
-              node {
-                ... on JobTypeCommand {
-                  uuid
-                  label
-                  passed
-                  state
-                  url
-                  build {
-                    commit
-                  }
-                  createdAt
-                  finishedAt
-                  artifacts(first: 100) {
-                    edges {
-                      node {
-                        downloadURL
-                        path
+    tries = 3
+    for attempt in range(tries):
+        resp = requests.post(
+            "https://graphql.buildkite.com/v1",
+            headers={"Authorization": f"Bearer {BUILDKITE_TOKEN}"},
+            json={
+                "query": """
+    query AllPipelinesQuery {
+      pipeline(slug: "ray-project/ray-builders-branch") {
+        builds(branch: "master", first: 120) {
+          edges {
+            node {
+              jobs(first: 100) {
+                edges {
+                  node {
+                    ... on JobTypeCommand {
+                      uuid
+                      label
+                      passed
+                      state
+                      url
+                      build {
+                        commit
+                      }
+                      createdAt
+                      finishedAt
+                      artifacts(first: 100) {
+                        edges {
+                          node {
+                            downloadURL
+                            path
+                          }
+                        }
                       }
                     }
                   }
@@ -193,12 +197,17 @@ query AllPipelinesQuery {
         }
       }
     }
-  }
-}
-"""
-        },
-    )
-    assert resp.status_code == 200, resp.text
+    """
+            },
+        )
+        try:
+            assert resp.status_code == 200, resp.text
+        except AssertionError as e:
+            if attempt < tries - 1:
+                continue
+            else:
+                raise
+        break
     builds = resp.json()["data"]["pipeline"]["builds"]["edges"]
     results = []
     for build in builds:
@@ -663,6 +672,7 @@ if __name__ == "__main__":
 
     print("Downloading Travis Status")
     travis_data = [get_travis_status(commit.sha) for commit in tqdm(commits)]
+    print("Downloading Buildkite Status")
     buildkite_status = get_buildkite_status()
 
     print("✍️ Writing Data")
