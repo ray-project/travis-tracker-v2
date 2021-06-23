@@ -154,7 +154,7 @@ class BuildkiteStatus:
 
 def get_buildkite_status() -> List[BuildkiteStatus]:
     BUILDKITE_TOKEN = os.environ["BUILDKITE_TOKEN"]
-    tries = 3
+    tries = 5
     for attempt in range(tries):
         resp = requests.post(
             "https://graphql.buildkite.com/v1",
