@@ -1,4 +1,6 @@
 import argparse
+import sys
+import traceback
 from collections import defaultdict
 import json
 import glob
@@ -201,6 +203,7 @@ query AllPipelinesQuery {
     assert resp.status_code == 200, resp.text
     builds = resp.json()["data"]["pipeline"]["builds"]["edges"]
     results = []
+    exception_counter: int = 0
     for build in builds:
         jobs = build["node"]["jobs"]["edges"]
         for job in jobs:
@@ -228,15 +231,24 @@ query AllPipelinesQuery {
                 if not os.path.exists(on_disk_path):
                     # Use the artifact link to download the logs. This might not work well
                     # on slower internet because the link is presigned S3 url and only last 10min.
-                    resp = requests.get(url)
-                    assert (
-                        resp.status_code == 200
-                    ), f"failed to download {url} for {actual_job}"
-                    if len(resp.content):
-                        # Make the directory, just to be safe.
-                        os.makedirs(os.path.split(on_disk_path)[0], exist_ok=True)
-                        with open(on_disk_path, "wb") as f:
-                            f.write(resp.content)
+                    try:
+                        resp = requests.get(url)
+                        assert (
+                            resp.status_code == 200
+                        ), f"failed to download {url} for {actual_job}: {resp.text}"
+                        if len(resp.content):
+                            # Make the directory, just to be safe.
+                            os.makedirs(os.path.split(on_disk_path)[0], exist_ok=True)
+                            with open(on_disk_path, "wb") as f:
+                                f.write(resp.content)
+                    except Exception as e:
+                        traceback.print_exc()
+                        exception_counter += 1
+
+    if exception_counter > 100:
+        assert (
+            False
+        ), "More than 100 exception as occured when downloading Buldkite status."
     return results
 
 
@@ -644,8 +656,7 @@ def get_args():
     return p.parse_args()
 
 
-if __name__ == "__main__":
-
+def main():
     print("🐙 Fetching Commits from Github")
     commits = get_latest_commit()
 
@@ -694,3 +705,20 @@ if __name__ == "__main__":
     print("⌛️ Writing Out to Frontend")
     with open("js/src/data.json", "w") as f:
         json.dump(root_display.to_dict(), f)
+
+
+if __name__ == "__main__":
+    if os.environ.get("CI"):
+        total_retries = 3
+        for i in range(1, total_retries + 1):
+            print(f"In CI environment, try {i} of {total_retries}")
+            try:
+                main()
+                break
+            except Exception as e:
+                traceback.print_exc()
+        else:
+            print("All failed")
+            sys.exit(1)
+    else:
+        main()
