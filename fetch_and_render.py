@@ -155,6 +155,20 @@ class BuildkiteStatus:
 
 
 def get_buildkite_status() -> List[BuildkiteStatus]:
+    result = []
+    page_token = None
+    for offset in [0, 20, 40, 60, 80, 100]:
+        if offset == 0:
+            chunks, page_token = get_buildkite_status_paginated(f"first: 20")
+        else:
+            chunks, page_token = get_buildkite_status_paginated(
+                f'first: 20, after: "{page_token}"'
+            )
+        result.extend(chunks)
+    return result
+
+
+def get_buildkite_status_paginated(page_command) -> List[BuildkiteStatus]:
     BUILDKITE_TOKEN = os.environ["BUILDKITE_TOKEN"]
     tries = 5
     for attempt in range(tries):
@@ -165,7 +179,10 @@ def get_buildkite_status() -> List[BuildkiteStatus]:
                 "query": """
     query AllPipelinesQuery {
       pipeline(slug: "ray-project/ray-builders-branch") {
-        builds(branch: "master", first: 120) {
+        builds(branch: "master", PAGE_COMMAND_PLACEHOLDER) {
+          pageInfo {
+            endCursor
+          }
           edges {
             node {
               jobs(first: 100) {
@@ -199,7 +216,9 @@ def get_buildkite_status() -> List[BuildkiteStatus]:
         }
       }
     }
-    """
+    """.replace(
+                    "PAGE_COMMAND_PLACEHOLDER", page_command
+                )
             },
         )
         try:
@@ -210,6 +229,7 @@ def get_buildkite_status() -> List[BuildkiteStatus]:
             else:
                 raise
         break
+    page_cursor = resp.json()["data"]["pipeline"]["builds"]["pageInfo"]["endCursor"]
     builds = resp.json()["data"]["pipeline"]["builds"]["edges"]
     results = []
     exception_counter: int = 0
@@ -258,7 +278,7 @@ def get_buildkite_status() -> List[BuildkiteStatus]:
         assert (
             False
         ), "More than 100 exception as occured when downloading Buldkite status."
-    return results
+    return results, page_cursor
 
 
 def download_files_given_prefix(prefix: str):
