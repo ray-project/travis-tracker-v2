@@ -1,4 +1,5 @@
 import argparse
+from concurrent.futures import ThreadPoolExecutor, wait
 import sys
 import traceback
 from collections import defaultdict
@@ -73,7 +74,47 @@ class TravisJobStat:
     duration_s: str
 
 
+GITHUB_TO_TRAVIS_STATUS_MAP = {
+    "action_required": "created",
+    "cancelled": "failed",
+    "failure": "failed",
+    "neutral": "created",
+    "success": "passed",
+    "skipped": "failed",
+    "stale": "failed",
+    "timed_out": "failed",
+}
+
+
 def get_travis_status(commit_sha, cache_dir="travis_events") -> List[TravisJobStat]:
+    def get_gha_status(sha):
+        data = requests.get(
+            f"https://api.github.com/repos/ray-project/ray/commits/{sha}/check-suites",
+            headers=GH_HEADERS,
+        ).json()
+
+        if "check_suites" not in data:
+            return None
+
+        for check in data["check_suites"]:
+            slug = check["app"]["slug"]
+            if slug == "github-actions" and check["status"] == "completed":
+                data = requests.get(check["check_runs_url"], headers=GH_HEADERS).json()
+                if len(data["check_runs"]) == 0:
+                    return None
+                run = data["check_runs"][0]
+                return TravisJobStat(
+                    job_id=run["id"],
+                    os="windows",
+                    commit=sha,
+                    env="github action main job",
+                    state=GITHUB_TO_TRAVIS_STATUS_MAP[check["conclusion"]],
+                    url=run["html_url"],
+                    duration_s=_parse_duration(
+                        check.get("started_at"), check.get("completed_at")
+                    ),
+                )
+
     def find_travis_build_id(sha):
         data = requests.get(
             f"https://api.github.com/repos/ray-project/ray/commits/{sha}/check-suites",
@@ -121,15 +162,23 @@ def get_travis_status(commit_sha, cache_dir="travis_events") -> List[TravisJobSt
     status_file = dir_name / "status_complete"
     data_file = dir_name / "status.json"
     if not status_file.exists():
+        statuses = []
+        gha_status = get_gha_status(commit_sha)
+        if gha_status:
+            statuses.append(gha_status)
+
         build_id = find_travis_build_id(commit_sha)
-        if build_id is None:
+        if build_id is not None:
+            job_status = list_travis_job_status(build_id)
+            statuses.extend(job_status)
+
+        if len(statuses) == 0:
             return []
-        job_status = list_travis_job_status(build_id)
 
         with open(data_file, "w") as f:
-            f.write(TravisJobStat.schema().dumps(job_status, many=True))
+            f.write(TravisJobStat.schema().dumps(statuses, many=True))
 
-        job_states = {job.state for job in job_status}
+        job_states = {job.state for job in statuses}
         if len(job_states.intersection({"created", "started"})) == 0:
             status_file.touch()
 
@@ -147,28 +196,32 @@ class BuildkiteStatus:
     state: str
     url: str
     commit: str
-    created_at: Optional[str]
+    startedAt: Optional[str]
     finished_at: Optional[str]
 
     def get_duration_s(self) -> int:
-        return _parse_duration(self.created_at, self.finished_at)
+        return _parse_duration(self.startedAt, self.finished_at)
 
 
-def get_buildkite_status() -> List[BuildkiteStatus]:
+def get_buildkite_status() -> Tuple[List, List[BuildkiteStatus]]:
+    builds = []
     result = []
     page_token = None
     for offset in [0, 20, 40, 60, 80, 100]:
         if offset == 0:
-            chunks, page_token = get_buildkite_status_paginated(f"first: 20")
+            builds_chunk, result_chunks, page_token = get_buildkite_status_paginated(
+                f"first: 20"
+            )
         else:
-            chunks, page_token = get_buildkite_status_paginated(
+            builds_chunk, result_chunks, page_token = get_buildkite_status_paginated(
                 f'first: 20, after: "{page_token}"'
             )
-        result.extend(chunks)
-    return result
+        builds.extend(builds_chunk)
+        result.extend(result_chunks)
+    return builds, result
 
 
-def get_buildkite_status_paginated(page_command) -> List[BuildkiteStatus]:
+def get_buildkite_status_paginated(page_command):
     BUILDKITE_TOKEN = os.environ["BUILDKITE_TOKEN"]
     tries = 5
     for attempt in range(tries):
@@ -185,6 +238,10 @@ def get_buildkite_status_paginated(page_command) -> List[BuildkiteStatus]:
           }
           edges {
             node {
+              createdAt
+              startedAt
+              finishedAt
+              number
               jobs(first: 100) {
                 edges {
                   node {
@@ -198,6 +255,8 @@ def get_buildkite_status_paginated(page_command) -> List[BuildkiteStatus]:
                         commit
                       }
                       createdAt
+                      runnableAt
+                      startedAt
                       finishedAt
                       artifacts(first: 100) {
                         edges {
@@ -232,8 +291,11 @@ def get_buildkite_status_paginated(page_command) -> List[BuildkiteStatus]:
     page_cursor = resp.json()["data"]["pipeline"]["builds"]["pageInfo"]["endCursor"]
     builds = resp.json()["data"]["pipeline"]["builds"]["edges"]
     results = []
-    exception_counter: int = 0
-    for build in builds:
+
+    thread_pool = ThreadPoolExecutor(100)
+    futures = []
+
+    for build in tqdm(builds):
         jobs = build["node"]["jobs"]["edges"]
         for job in jobs:
             actual_job = job["node"]
@@ -246,7 +308,7 @@ def get_buildkite_status_paginated(page_command) -> List[BuildkiteStatus]:
                 state=actual_job["state"],
                 url=actual_job["url"],
                 commit=sha,
-                created_at=actual_job["createdAt"],
+                startedAt=actual_job["startedAt"],
                 finished_at=actual_job["finishedAt"],
             )
             results.append(status)
@@ -260,8 +322,8 @@ def get_buildkite_status_paginated(page_command) -> List[BuildkiteStatus]:
                 if not os.path.exists(on_disk_path):
                     # Use the artifact link to download the logs. This might not work well
                     # on slower internet because the link is presigned S3 url and only last 10min.
-                    try:
-                        resp = requests.get(url)
+                    def task(url, on_disk_path, actual_job):
+                        resp = requests.get(url, timeout=5)
                         assert (
                             resp.status_code == 200
                         ), f"failed to download {url} for {actual_job}: {resp.text}"
@@ -270,15 +332,17 @@ def get_buildkite_status_paginated(page_command) -> List[BuildkiteStatus]:
                             os.makedirs(os.path.split(on_disk_path)[0], exist_ok=True)
                             with open(on_disk_path, "wb") as f:
                                 f.write(resp.content)
-                    except Exception as e:
-                        traceback.print_exc()
-                        exception_counter += 1
 
-    if exception_counter > 100:
-        assert (
-            False
-        ), "More than 100 exception as occured when downloading Buldkite status."
-    return results, page_cursor
+                    futures.append(
+                        thread_pool.submit(task, url, on_disk_path, actual_job)
+                    )
+    wait(futures)
+    exception_set = [fut for fut in futures if fut.exception()]
+
+    if len(exception_set) > 100:
+        print("More than 100 exception as occured when downloading Buldkite status.")
+        raise exception_set[0]
+    return builds, results, page_cursor
 
 
 def download_files_given_prefix(prefix: str):
@@ -704,7 +768,9 @@ def main():
     print("Downloading Travis Status")
     travis_data = [get_travis_status(commit.sha) for commit in tqdm(commits)]
     print("Downloading Buildkite Status")
-    buildkite_status = get_buildkite_status()
+    raw_builds_result, buildkite_status = get_buildkite_status()
+    with open("cached_buildkite.json", "w") as f:
+        json.dump(raw_builds_result, f)
 
     print("✍️ Writing Data")
     db = ResultsDB("./results.db")
