@@ -447,11 +447,20 @@ class ResultsDBReader:
         owners = dict(per_team_pass_rate_all).keys()
 
         data_source = [
-            {"key": "Pass Rate", **dict(per_team_pass_rate_all)},
-            {"key": "Pass Rate (No Windows)", **dict(per_team_pass_rate_no_windows)},
+            {
+                "key": "Pass Rate",
+                **{k: f"{int(v*100)}%" for k, v in per_team_pass_rate_all},
+            },
+            {
+                "key": "Pass Rate (No Windows)",
+                **{k: f"{int(v*100)}%" for k, v in per_team_pass_rate_no_windows},
+            },
             {
                 "key": "Pass Rate (No Windows, Flaky)",
-                **dict(per_team_pass_rate_no_windows_no_flaky),
+                **{
+                    k: f"{int(v*100)}%"
+                    for k, v in per_team_pass_rate_no_windows_no_flaky
+                },
             },
         ]
         columns = [{"title": "", "dataIndex": "key", "key": "key"}] + [
