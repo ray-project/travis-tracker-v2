@@ -1,6 +1,7 @@
 import { graphql, PageProps } from "gatsby";
 import React, { useState } from "react";
 import { Button, Radio, Table } from "antd";
+import { QueryStateOpts, useQueryState } from "use-location-state";
 
 import LayoutWrapper from "../components/layout";
 import BuildTimeFooter from "../components/time";
@@ -27,12 +28,22 @@ type DataProps = {
 };
 
 const App: React.FC<PageProps<DataProps>> = ({ data }) => {
-  const [showAll, setShowAll] = useState<boolean>(false);
-  const [compactMode, setCompactMode] = useState<boolean>(false);
-  const [ownerSelection, setOwnerSelection] = useState<string>("all");
-  const numHidden = displayData.failed_tests.length - 100;
+  const [showAll, setShowAll] = useQueryState<boolean>("showAll", false);
+  const [compactMode, setCompactMode] = useQueryState<boolean>(
+    "compactMode",
+    false
+  );
+  const [ownerSelection, setOwnerSelection] = useQueryState<string>(
+    "owner",
+    "all"
+  );
+  const [sortByRuntime, setSortByRuntime] = useQueryState<boolean>(
+    "sortByRuntime",
+    false
+  );
+
   const { dataSource, columns } = JSON.parse(displayData.table_stat);
-  const [sortByRuntime, setSortByRuntime] = useState<boolean>(false);
+  const numHidden = displayData.failed_tests.length - 100;
 
   let testsToDisplay = displayData.failed_tests;
   testsToDisplay = testsToDisplay.filter(
@@ -62,7 +73,7 @@ const App: React.FC<PageProps<DataProps>> = ({ data }) => {
 
       <Radio.Group
         onChange={(e) => setOwnerSelection(e.target.value)}
-        defaultValue="all"
+        defaultValue={ownerSelection}
       >
         <Radio.Button value="all">team:all</Radio.Button>
         {displayData.test_owners.map((owner) => (
