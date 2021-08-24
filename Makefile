@@ -1,5 +1,5 @@
 interface:
-	py-ts-interfaces -o js/src/interface.ts interfaces.py
+	py-ts-interfaces -o js/src/interface.ts ray_ci_tracker/interfaces.py
 	sed -i.bak "s/^interface/export interface/g" js/src/interface.ts
 
 data:

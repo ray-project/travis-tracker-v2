@@ -15,6 +15,7 @@ export interface TestResult {
     status: string;
     total_duration_s: number;
     is_labeled_flaky: boolean;
+    owner: string;
 }
 
 export interface BuildResult {
@@ -22,6 +23,7 @@ export interface BuildResult {
     job_url: string;
     os: string;
     build_env: string;
+    job_id: string;
     results: Array<TestResult>;
 }
 
@@ -55,9 +57,39 @@ export interface SiteFailedTest {
     travis_links: Array<SiteTravisLink>;
     build_time_stats: Array<number> | null;
     is_labeled_flaky: boolean;
+    owner: string;
 }
 
 export interface SiteDisplayRoot {
     failed_tests: Array<SiteFailedTest>;
     stats: Array<SiteStatItem>;
+    test_owners: Array<string>;
+    table_stat: string;
+}
+
+export interface BuildkiteArtifact {
+    url: string;
+    bazel_events_path: string;
+}
+
+export interface BuildkiteStatus {
+    job_id: string;
+    label: string;
+    passed: boolean;
+    state: string;
+    url: string;
+    commit: string;
+    startedAt: string | null;
+    finished_at: string | null;
+    artifacts: Array<BuildkiteArtifact>;
+}
+
+export interface GHAJobStat {
+    job_id: string;
+    os: string;
+    commit: string;
+    env: string;
+    state: string;
+    url: string;
+    duration_s: number;
 }

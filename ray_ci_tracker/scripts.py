@@ -81,10 +81,17 @@ async def etl_process(ctx, cache_dir, db_path):
 
     print("✍️ Writing Data")
     db = ResultsDBWriter(db_path, wipe=True)
+
+    print("[1/n] Writing commits")
     db.write_commits(loaded["commits"])
+    print("[2/n] Writing build results")
     db.write_build_results(loaded["bazel_events"])
+    print("[3/n] Writing buildkite")
     db.write_buildkite_data(loaded["buildkite_status"])
+    print("[4/n] Writing github action")
     db.write_gha_data(loaded["gha_status"])
+    print("[5/n] fixing data with backfill")
+    db.backfill_test_owners()
 
 
 @cli.command("analysis")
@@ -102,12 +109,15 @@ def perform_analysis(db_path, frontend_json_path):
             travis_links=db.get_travis_link(test_name),
             build_time_stats=db.get_recent_build_time_stats(test_name),
             is_labeled_flaky=db.get_marked_flaky_status(test_name),
+            owner=db.get_test_owner(test_name),
         )
         for test_name, _ in failed_tests
     ]
     root_display = SiteDisplayRoot(
         failed_tests=data_to_display,
         stats=db.get_stats(),
+        test_owners=db.get_all_owners(),
+        table_stat=db.get_table_stat(),
     )
 
     print("⌛️ Writing Out to Frontend", frontend_json_path)

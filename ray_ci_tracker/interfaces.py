@@ -38,6 +38,7 @@ class TestResult(Mixin):
     status: str
     total_duration_s: float
     is_labeled_flaky: bool
+    owner: str
 
 
 @dataclass
@@ -84,12 +85,15 @@ class SiteFailedTest(Mixin):
     travis_links: List[SiteTravisLink]
     build_time_stats: Optional[List[float]]
     is_labeled_flaky: bool
+    owner: str
 
 
 @dataclass
 class SiteDisplayRoot(Mixin):
     failed_tests: List[SiteFailedTest]
     stats: List[SiteStatItem]
+    test_owners: List[str]
+    table_stat: str
 
 
 @dataclass

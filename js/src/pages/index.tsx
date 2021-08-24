@@ -1,6 +1,6 @@
 import { graphql, PageProps } from "gatsby";
 import React, { useState } from "react";
-import { Button } from "antd";
+import { Button, Radio, Table } from "antd";
 
 import LayoutWrapper from "../components/layout";
 import BuildTimeFooter from "../components/time";
@@ -29,28 +29,65 @@ type DataProps = {
 const App: React.FC<PageProps<DataProps>> = ({ data }) => {
   const [showAll, setShowAll] = useState<boolean>(false);
   const [compactMode, setCompactMode] = useState<boolean>(false);
+  const [ownerSelection, setOwnerSelection] = useState<string>("all");
   const numHidden = displayData.failed_tests.length - 100;
+  const { dataSource, columns } = JSON.parse(displayData.table_stat);
+  const [sortByRuntime, setSortByRuntime] = useState<boolean>(false);
+
+  let testsToDisplay = displayData.failed_tests;
+  testsToDisplay = testsToDisplay.filter(
+    (c) => ownerSelection === "all" || ownerSelection === c.owner
+  );
+  if (sortByRuntime) {
+    // compare by p50
+    testsToDisplay = testsToDisplay.sort(
+      (a, b) => b.build_time_stats[1] - a.build_time_stats[1]
+    );
+  } else if (!showAll) {
+    testsToDisplay = testsToDisplay.slice(0, 100);
+  }
+
   return (
     <LayoutWrapper>
       <Title></Title>
 
       <StatsPane stats={displayData.stats}></StatsPane>
 
+      <Table
+        dataSource={dataSource}
+        columns={columns}
+        size={"small"}
+        pagination={false}
+      ></Table>
+
+      <Radio.Group
+        onChange={(e) => setOwnerSelection(e.target.value)}
+        defaultValue="all"
+      >
+        <Radio.Button value="all">team:all</Radio.Button>
+        {displayData.test_owners.map((owner) => (
+          <Radio.Button value={owner}>{owner}</Radio.Button>
+        ))}
+      </Radio.Group>
+
       <Button
         style={{ margin: "12px" }}
-        type={"primary"}
+        type={"default"}
         onClick={() => setCompactMode((val) => !val)}
       >
         Toggle Compact Mode
       </Button>
+      <Button
+        style={{ margin: "12px" }}
+        type={"default"}
+        onClick={() => setSortByRuntime((val) => !val)}
+      >
+        Toggle Sort by Runtime
+      </Button>
 
-      {showAll
-        ? displayData.failed_tests.map((c) => (
-            <TestCase case={c} compact={compactMode}></TestCase>
-          ))
-        : displayData.failed_tests
-            .slice(0, 100)
-            .map((c) => <TestCase case={c} compact={compactMode}></TestCase>)}
+      {testsToDisplay.map((c) => (
+        <TestCase case={c} compact={compactMode}></TestCase>
+      ))}
 
       {numHidden > 0 && (
         <Button

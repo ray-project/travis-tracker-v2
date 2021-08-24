@@ -1,8 +1,10 @@
 from collections import defaultdict
+from itertools import chain
 from sqlite3 import connect
 from typing import List, Optional
 
 import numpy as np
+import ujson as json
 
 from ray_ci_tracker.interfaces import (
     BuildkiteStatus,
@@ -38,7 +40,8 @@ class ResultsDBWriter:
             job_id TEXT,
             sha TEXT,
             test_duration_s REAL,
-            is_labeled_flaky BOOLEAN
+            is_labeled_flaky BOOLEAN,
+            owner TEXT
         );
 
         DROP TABLE IF EXISTS commits;
@@ -49,7 +52,13 @@ class ResultsDBWriter:
             message TEXT,
             url TEXT,
             avatar_url TEXT
-        )
+        );
+
+        CREATE INDEX test_result_hot_path_job_id
+        ON test_result (job_id);
+
+        CREATE INDEX test_result_hot_path_test_name
+        ON test_result (test_name);
         """
         )
 
@@ -85,11 +94,12 @@ class ResultsDBWriter:
                         build_result.sha,
                         test.total_duration_s,
                         test.is_labeled_flaky,
+                        test.owner,
                     )
                 )
 
         self.table.executemany(
-            "INSERT INTO test_result VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO test_result VALUES (?,?,?,?,?,?,?,?,?,?)",
             records_to_insert,
         )
         self.table.commit()
@@ -97,12 +107,10 @@ class ResultsDBWriter:
     def write_buildkite_data(self, buildkite_data: List[BuildkiteStatus]):
         records_to_insert = []
         for job in buildkite_data:
-            num_result = len(
-                self.table.execute(
-                    f"SELECT * FROM test_result WHERE job_id == (?)",
-                    (job.job_id,),
-                ).fetchall()
-            )
+            num_result = self.table.execute(
+                f"SELECT COUNT(*) FROM test_result WHERE job_id == (?)",
+                (job.job_id,),
+            ).fetchone()[0]
             status = "PASSED" if job.passed else "FAILED"
             if job.state == "FINISHED":
                 records_to_insert.append(
@@ -117,10 +125,11 @@ class ResultsDBWriter:
                         job.commit,
                         job.get_duration_s(),
                         False,  # is_labeled_flaky
+                        "infra",  # owner
                     )
                 )
         self.table.executemany(
-            "INSERT INTO test_result VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO test_result VALUES (?,?,?,?,?,?,?,?,?,?)",
             records_to_insert,
         )
         self.table.commit()
@@ -147,11 +156,38 @@ class ResultsDBWriter:
                         gha_run.commit,
                         gha_run.duration_s,
                         False,  # is_labeled_flaky
+                        "infra",  # owner
                     )
                 )
         self.table.executemany(
-            "INSERT INTO test_result VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO test_result VALUES (?,?,?,?,?,?,?,?,?,?)",
             records_to_insert,
+        )
+        self.table.commit()
+
+    def backfill_test_owners(self):
+        results = self.table.execute(
+            """
+        WITH need_backfill as (
+            SELECT test_name
+            FROM test_result
+            GROUP BY test_name
+            HAVING COUNT(DISTINCT owner) > 1
+        )
+        SELECT need_backfill.test_name, owner
+        FROM need_backfill, test_result
+        WHERE need_backfill.test_name = test_result.test_name
+        AND test_result.owner NOT LIKE 'unknown'
+        GROUP BY need_backfill.test_name
+        """
+        ).fetchall()
+        self.table.executemany(
+            """
+            UPDATE test_result
+            SET owner = (?)
+            WHERE test_name = (?)
+            """,
+            [(owner, test_name) for test_name, owner in results],
         )
         self.table.commit()
 
@@ -170,6 +206,17 @@ class ResultsDBReader:
         """
         failed_tests = self.table.execute(query, ("FAILED",)).fetchall()
         flaky_tests = self.table.execute(query, ("FLAKY",)).fetchall()
+        passed_tests = self.table.execute(
+            f"""
+            SELECT test_name, SUM(100 - commits.idx) as weight
+            FROM test_result, commits
+            WHERE test_result.sha == commits.sha
+            AND status == (?)
+            AND test_result.test_duration_s > 600
+            GROUP BY test_name
+        """,
+            ("PASSED",),
+        ).fetchall()
         top_failed_tests = self.table.execute(
             """
             SELECT test_name, SUM(10 - commits.idx) as weight
@@ -203,6 +250,9 @@ class ResultsDBReader:
 
         for test_name, score in flaky_tests:
             prioritization[test_name] += 0.1 * score
+
+        for test_name, score in passed_tests:
+            prioritization[test_name] += 0.001 * score
 
         results = sorted(list(prioritization.items()), key=lambda kv: -kv[1])
         return results
@@ -239,14 +289,14 @@ class ResultsDBReader:
             SELECT test_duration_s
             FROM test_result, commits
             WHERE test_result.sha == commits.sha
-            AND commits.idx <= 20
+            AND commits.idx <= 50
             AND test_name == (?)
             """,
             (test_name,),
         )
         arr = np.array(list(cursor)).flatten()
         if len(arr) == 0:
-            return None
+            return [0, 0, 0]
         runtime_stat = np.percentile(arr, [0, 50, 90]).tolist()
         return runtime_stat
 
@@ -256,6 +306,21 @@ class ResultsDBReader:
             (test_name,),
         )
         return bool(list(cursor)[0][0])
+
+    def get_test_owner(self, test_name: str) -> str:
+        cursor = self.table.execute(
+            "SELECT owner FROM test_result WHERE test_name == (?) GROUP BY owner",
+            (test_name,),
+        )
+        owners = cursor.fetchall()
+        return owners[0][0]
+
+    def get_all_owners(self) -> List[str]:
+        return list(
+            chain.from_iterable(
+                self.table.execute("SELECT owner FROM test_result GROUP BY owner")
+            )
+        )
 
     def get_commit_tooltips(self, test_name: str):
         cursor = self.table.execute(
@@ -307,22 +372,23 @@ class ResultsDBReader:
                 FROM test_result, commits
                 WHERE test_result.sha == commits.sha
                   AND test_result.is_labeled_flaky == 0
+                  AND test_result.os NOT LIKE 'windows'
                 GROUP BY commits.sha
                 ORDER BY commits.idx
             )
         """
 
-        pass_rate_query = """
-            -- Number of tests with <95% pass rate
-            SELECT COUNT(*)
+        master_green_without_windows_query = """
+            -- Master Green Rate (past 100 commits)
+            SELECT SUM(green)*1.0/COUNT(green)
             FROM (
-                SELECT test_name, 1 - (SUM(status == 'FAILED') *1.0 / COUNT(*)) AS success_rate
+                SELECT SUM(status == 'FAILED') == 0 as green
                 FROM test_result, commits
                 WHERE test_result.sha == commits.sha
-                GROUP BY test_name
-                ORDER BY success_rate
+                  AND test_result.os NOT LIKE 'windows'
+                GROUP BY test_result.sha
+                ORDER BY commits.idx
             )
-            WHERE success_rate < 0.95
         """
 
         return [
@@ -333,16 +399,62 @@ class ResultsDBReader:
                 unit="%",
             ),
             SiteStatItem(
-                key="Master Green (without flaky tests)",
-                value=self.table.execute(master_green_without_flaky_query).fetchone()[0]
+                key="Master Green (without windows)",
+                value=self.table.execute(master_green_without_windows_query).fetchone()[
+                    0
+                ]
                 * 100,
                 desired_value=100,
                 unit="%",
             ),
             SiteStatItem(
-                key="Number of Tests <95% Pass",
-                value=self.table.execute(pass_rate_query).fetchone()[0],
-                desired_value=0,
-                unit="",
+                key="Master Green (without window + flaky tests)",
+                value=self.table.execute(master_green_without_flaky_query).fetchone()[0]
+                * 100,
+                desired_value=100,
+                unit="%",
             ),
         ]
+
+    def get_table_stat(self):
+        query_template = """
+        SELECT owner, SUM(green)*1.0/COUNT(green) as pass_rate
+        FROM (
+            SELECT test_result.owner, SUM(status == 'FAILED') == 0 as green
+            FROM test_result, commits
+            WHERE test_result.sha == commits.sha
+            AND commits.idx <= 100
+            {condition}
+            GROUP BY test_result.owner, test_result.sha
+            ORDER BY commits.idx
+        )
+        GROUP BY owner
+        ORDER BY pass_rate
+        """
+
+        per_team_pass_rate_all = self.table.execute(
+            query_template.format(condition="")
+        ).fetchall()
+        per_team_pass_rate_no_windows = self.table.execute(
+            query_template.format(condition="AND test_result.os NOT LIKE 'windows'")
+        ).fetchall()
+        per_team_pass_rate_no_windows_no_flaky = self.table.execute(
+            query_template.format(
+                condition="AND test_result.os NOT LIKE 'windows' AND test_result.is_labeled_flaky == 0"
+            )
+        ).fetchall()
+
+        owners = dict(per_team_pass_rate_all).keys()
+
+        data_source = [
+            {"key": "Pass Rate", **dict(per_team_pass_rate_all)},
+            {"key": "Pass Rate (No Windows)", **dict(per_team_pass_rate_no_windows)},
+            {
+                "key": "Pass Rate (No Windows, Flaky)",
+                **dict(per_team_pass_rate_no_windows_no_flaky),
+            },
+        ]
+        columns = [{"title": "", "dataIndex": "key", "key": "key"}] + [
+            {"title": name, "dataIndex": name, "key": name} for name in owners
+        ]
+        return json.dumps({"dataSource": data_source, "columns": columns})

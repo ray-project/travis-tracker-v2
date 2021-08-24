@@ -79,15 +79,19 @@ async def get_or_fetch(
 
 
 def _yield_test_result(bazel_log_path):
-    # Gather the known flaky set
+    # Gather the known flaky set and test owners
     flaky_tests = set()
+    test_owners = dict()
     with open(bazel_log_path) as f:
         for line in f:
             loaded = json.loads(line)
             if "targetConfigured" in loaded["id"] and "tag" in loaded["configured"]:
                 test_name = loaded["id"]["targetConfigured"]["label"]
-                if "flaky" in loaded["configured"]["tag"]:
-                    flaky_tests.add(test_name)
+                for tag in loaded["configured"]["tag"]:
+                    if tag == "flaky":
+                        flaky_tests.add(test_name)
+                    if tag.startswith("team:"):
+                        test_owners[test_name] = tag.replace("team:", "")
 
     with open(bazel_log_path) as f:
         for line in f:
@@ -100,7 +104,13 @@ def _yield_test_result(bazel_log_path):
                 if status in {"FAILED", "TIMEOUT", "NO_STATUS"}:
                     status = "FAILED"
                 duration_s = float(test_summary["totalRunDurationMillis"]) / 1e3
-                yield TestResult(name, status, duration_s, name in flaky_tests)
+                yield TestResult(
+                    name,
+                    status,
+                    duration_s,
+                    name in flaky_tests,
+                    test_owners.get(name, "unknown"),
+                )
 
 
 def _process_single_build(dir_name) -> BuildResult:
