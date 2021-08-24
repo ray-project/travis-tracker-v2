@@ -429,7 +429,7 @@ class ResultsDBReader:
             ORDER BY commits.idx
         )
         GROUP BY owner
-        ORDER BY pass_rate
+        ORDER BY owner
         """
 
         per_team_pass_rate_all = self.table.execute(
