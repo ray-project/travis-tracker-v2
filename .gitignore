@@ -2,6 +2,7 @@
 bazel_events
 travis_events
 results.db
+cache_dir/
 
 .vscode/
 
