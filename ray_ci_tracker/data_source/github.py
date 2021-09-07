@@ -108,7 +108,7 @@ class GithubDataSource:
                     data = (
                         await client.get(check["check_runs_url"], headers=GH_HEADERS)
                     ).json()
-                    if len(data["check_runs"]) == 0:
+                    if len(data.get("check_runs", [])) == 0:
                         return None
                     run = data["check_runs"][0]
                     return GHAJobStat(
