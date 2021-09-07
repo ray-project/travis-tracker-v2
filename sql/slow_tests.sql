@@ -11,5 +11,5 @@ FROM (
   AND commits.idx <= 20
   GROUP BY test_name
   ORDER BY mean_duration_s DESC
-  LIMIT 10
+  LIMIT 20
 )
