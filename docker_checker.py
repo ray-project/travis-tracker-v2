@@ -82,6 +82,8 @@ def check_recent_commits_have_docker_build() -> List[str]:
     all_images.update(check_last_updated_for_repo("ray-ml"))
     failed = []
     for tag, date in all_images.items():
+        if tag.startswith("ray-ml/") and tag.endswith("-cpu"):
+            continue
         if date < commit_time:
             failed.append(f"- `{tag}` did not build for SHA: `{sha}`")
     if len(failed) == 0:
