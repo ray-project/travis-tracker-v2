@@ -1,4 +1,5 @@
 from collections import defaultdict
+import dataclasses
 from itertools import chain
 from sqlite3 import connect
 from typing import List, Optional
@@ -7,6 +8,7 @@ import numpy as np
 import ujson as json
 
 from ray_ci_tracker.interfaces import (
+    BuildkitePRBuildTime,
     BuildkiteStatus,
     BuildResult,
     GHAJobStat,
@@ -52,6 +54,19 @@ class ResultsDBWriter:
             message TEXT,
             url TEXT,
             avatar_url TEXT
+        );
+
+        DROP TABLE IF EXISTS pr_time;
+        CREATE TABLE pr_time (
+            sha TEXT,
+            created_by TEXT,
+            state TEXT,
+            url TEXT,
+            created_at TEXT,
+            started_at TEXT,
+            finished_at TEXT,
+            pull_id TEXT,
+            duration_min REAL
         );
 
         CREATE INDEX test_result_hot_path_job_id
@@ -100,6 +115,21 @@ class ResultsDBWriter:
 
         self.table.executemany(
             "INSERT INTO test_result VALUES (?,?,?,?,?,?,?,?,?,?)",
+            records_to_insert,
+        )
+        self.table.commit()
+
+    def write_buildkite_pr_time(self, pr_time_data: List[BuildkitePRBuildTime]):
+        records_to_insert = []
+        for build in pr_time_data:
+            records_to_insert.append(
+                (
+                    *dataclasses.astuple(build),
+                    build.get_duration_s() / 60,
+                )
+            )
+        self.table.executemany(
+            f"INSERT INTO pr_time VALUES ({','.join(['?']*9)})",
             records_to_insert,
         )
         self.table.commit()
@@ -391,6 +421,22 @@ class ResultsDBReader:
             )
         """
 
+        pr_build_p50_query = """
+            WITH finished_job_time AS (
+                SELECT duration_min
+                FROM pr_time
+                WHERE duration_min > 0
+                AND state NOT LIKE "%CANCELED%"
+                ORDER BY duration_min
+            )
+            SELECT duration_min
+            FROM finished_job_time
+            ORDER BY duration_min
+            LIMIT 1
+            OFFSET (SELECT COUNT(*)
+                    FROM finished_job_time) / 2
+        """
+
         return [
             SiteStatItem(
                 key="Master Green (past 100 commits)",
@@ -413,6 +459,12 @@ class ResultsDBReader:
                 * 100,
                 desired_value=100,
                 unit="%",
+            ),
+            SiteStatItem(
+                key="P50 Buildkite PR Build Time (last 500 builds)",
+                value=self.table.execute(pr_build_p50_query).fetchone()[0],
+                desired_value=45,
+                unit="min",
             ),
         ]
 

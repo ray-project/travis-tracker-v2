@@ -128,3 +128,18 @@ class GHAJobStat(Mixin):
     state: str
     url: str
     duration_s: int
+
+
+@dataclass
+class BuildkitePRBuildTime(Mixin):
+    commit: str
+    created_by: str
+    state: str
+    url: str
+    created_at: str
+    started_at: Optional[str]
+    finished_at: Optional[str]
+    pull_id: str
+
+    def get_duration_s(self) -> int:
+        return _parse_duration(self.started_at, self.finished_at)
