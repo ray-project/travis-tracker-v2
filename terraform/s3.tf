@@ -74,6 +74,15 @@ resource "aws_s3_bucket" "site" {
     # Destroying this bucket will cause the site to go offline
     prevent_destroy = true
   }
+
+  lifecycle_rule {
+    id      = "tmp"
+    prefix  = "tmp/"
+    enabled = true
+    expiration {
+      days = 30
+    }
+  }
 }
 
 resource "aws_s3_bucket_public_access_block" "site" {

@@ -49,6 +49,8 @@ jobs:
     - name: Upload site
       run: |
         aws s3 cp --recursive js/public s3://ray-travis-site
+        aws s3 cp results.db s3://ray-travis-site/tmp/flaky_dbs/latest.db
+        aws s3 cp results.db s3://ray-travis-site/tmp/flaky_dbs/snapshot_$(date +"%s").db
     - name: Post slack notification
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
