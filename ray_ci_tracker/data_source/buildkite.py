@@ -204,11 +204,12 @@ class BuildkiteSource:
                 for artifact in actual_job["artifacts"]["edges"]:
                     url = artifact["node"]["downloadURL"]
                     path = artifact["node"]["path"]
-                    filename = os.path.split(path)[1]
-                    on_disk_path = f"bazel_events/master/{sha}/{job_id}/{filename}"
-                    artifacts.append(
-                        BuildkiteArtifact(url=url, bazel_events_path=on_disk_path)
-                    )
+                    if "bazel_event_logs" in path:
+                        filename = os.path.split(path)[1]
+                        on_disk_path = f"bazel_events/master/{sha}/{job_id}/{filename}"
+                        artifacts.append(
+                            BuildkiteArtifact(url=url, bazel_events_path=on_disk_path)
+                        )
 
                 status = BuildkiteStatus(
                     job_id=job_id,
