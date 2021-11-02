@@ -276,4 +276,5 @@ class BuildkiteSource:
                 pull_id=build["node"].get("pullRequest", {"id": None}).get("id"),
             )
             for build in builds
+            if build["node"] is not None
         ]
