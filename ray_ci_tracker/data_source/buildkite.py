@@ -277,4 +277,5 @@ class BuildkiteSource:
             )
             for build in builds
             if build["node"] is not None
+            and build["node"].get("pullRequest") is not None
         ]
