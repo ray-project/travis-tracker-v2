@@ -138,6 +138,13 @@ class BuildkiteSource:
             ]
         )
         print("Downloading Buildkite Status (macOS Bazel Events)")
+
+        def contains_bad_commit(status: BuildkiteStatus):
+            return status.commit in {
+                "5985c1902dc24236e15757f42d899b0c0bc5b5d4",
+                "893f57591df7cb7b1fb4fed9978604964123eead",
+            }
+
         macos_bazel_events = await tqdm_asyncio.gather(
             *[
                 get_or_fetch(
@@ -154,7 +161,7 @@ class BuildkiteSource:
                     ),
                 )
                 for status in chain.from_iterable(buildkite_parsed)
-                if len(status.artifacts) > 0
+                if len(status.artifacts) > 0 and not contains_bad_commit(status)
             ]
         )
         print("Fetching Buildkite PR Time")
@@ -238,6 +245,7 @@ class BuildkiteSource:
         async with concurrency_limiter, httpx.AsyncClient() as client:
             for artifact in artifacts:
                 path = dir_prefix / artifact.bazel_events_path
+
                 path.parent.mkdir(exist_ok=True, parents=True)
                 bazel_events_dir = path.parent
                 async with client.stream("GET", artifact.url) as response:
