@@ -240,14 +240,13 @@ class BuildkiteSource:
                 path = dir_prefix / artifact.bazel_events_path
                 path.parent.mkdir(exist_ok=True, parents=True)
                 bazel_events_dir = path.parent
-                async with client.stream(
-                    "GET", artifact.url
-                ) as response, aiofiles.open(path, "wb") as f:
+                async with client.stream("GET", artifact.url) as response:
                     if response.status_code == 404:
                         continue
                     response.raise_for_status()
-                    async for chunk in response.aiter_bytes():
-                        await f.write(chunk)
+                    async with aiofiles.open(path, "wb") as f:
+                        async for chunk in response.aiter_bytes():
+                            await f.write(chunk)
 
         assert bazel_events_dir is not None
         return _process_single_build(bazel_events_dir)
