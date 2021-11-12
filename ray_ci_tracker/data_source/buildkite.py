@@ -242,6 +242,7 @@ class BuildkiteSource:
                 bazel_events_dir = path.parent
                 async with client.stream("GET", artifact.url) as response:
                     if response.status_code == 404:
+                        print(dir_prefix, artifact, 404)
                         continue
                     response.raise_for_status()
                     async with aiofiles.open(path, "wb") as f:
