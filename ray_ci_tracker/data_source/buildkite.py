@@ -243,6 +243,8 @@ class BuildkiteSource:
                 async with client.stream(
                     "GET", artifact.url
                 ) as response, aiofiles.open(path, "wb") as f:
+                    if response.status_code == 404:
+                        continue
                     response.raise_for_status()
                     async for chunk in response.aiter_bytes():
                         await f.write(chunk)
