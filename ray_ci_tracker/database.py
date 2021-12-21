@@ -453,13 +453,13 @@ class ResultsDBReader:
                 desired_value=100,
                 unit="%",
             ),
-            SiteStatItem(
-                key="Master Green (without window + flaky tests)",
-                value=self.table.execute(master_green_without_flaky_query).fetchone()[0]
-                * 100,
-                desired_value=100,
-                unit="%",
-            ),
+            # SiteStatItem(
+            #     key="Master Green (without window + flaky tests)",
+            #     value=self.table.execute(master_green_without_flaky_query).fetchone()[0]
+            #     * 100,
+            #     desired_value=100,
+            #     unit="%",
+            # ),
             SiteStatItem(
                 key="P50 Buildkite PR Build Time (last 500 builds)",
                 value=self.table.execute(pr_build_p50_query).fetchone()[0],
@@ -507,13 +507,13 @@ class ResultsDBReader:
                 "key": "Pass Rate (No Windows)",
                 **{k: f"{int(v*100)}%" for k, v in per_team_pass_rate_no_windows},
             },
-            {
-                "key": "Pass Rate (No Windows, Flaky)",
-                **{
-                    k: f"{int(v*100)}%"
-                    for k, v in per_team_pass_rate_no_windows_no_flaky
-                },
-            },
+            # {
+            #     "key": "Pass Rate (No Windows, Flaky)",
+            #     **{
+            #         k: f"{int(v*100)}%"
+            #         for k, v in per_team_pass_rate_no_windows_no_flaky
+            #     },
+            # },
         ]
         columns = [{"title": "", "dataIndex": "key", "key": "key"}] + [
             {"title": name, "dataIndex": name, "key": name} for name in owners
