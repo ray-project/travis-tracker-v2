@@ -113,8 +113,12 @@ def _yield_test_result(bazel_log_path):
                 )
 
 
-def _process_single_build(dir_name) -> BuildResult:
-    with open(dir_name / "metadata.json") as f:
+def _process_single_build(dir_name) -> Optional[BuildResult]:
+    metadata_path = dir_name / "metadata.json"
+    if not os.path.exists(dir_name / "metadata.json"):
+        return None
+
+    with open(metadata_path) as f:
         metadata = json.load(f)
 
     return BuildResult(

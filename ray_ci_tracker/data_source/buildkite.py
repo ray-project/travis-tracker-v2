@@ -3,7 +3,7 @@ import functools
 import os
 from itertools import chain
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import aiofiles
 import httpx
@@ -238,7 +238,7 @@ class BuildkiteSource:
         dir_prefix: Path,
         artifacts: List[BuildkiteArtifact],
         concurrency_limiter: asyncio.Semaphore,
-    ) -> BuildResult:
+    ) -> Optional[BuildResult]:
         assert len(artifacts)
 
         bazel_events_dir = None

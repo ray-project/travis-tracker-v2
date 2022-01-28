@@ -51,7 +51,8 @@ class S3DataSource:
             status = await proc.wait()
             assert status == 0, await proc.communicate()
 
-        return [
+        lst = [
             _process_single_build(Path(download_dir) / build)
             for build in os.listdir(download_dir)
         ]
+        return [item for item in lst if item is not None]
