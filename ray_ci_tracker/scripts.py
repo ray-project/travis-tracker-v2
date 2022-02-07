@@ -55,15 +55,15 @@ async def _downloader(
         cache_path, ctx.obj["cached_buildkite"], commits
     )
 
-    print("💻 Downloading Github Action Status")
-    gha_status = await GithubDataSource.fetch_all(
-        cache_path, ctx.obj["cached_gha"], commits
-    )
+    # print("💻 Downloading Github Action Status")
+    # gha_status = await GithubDataSource.fetch_all(
+    #     cache_path, ctx.obj["cached_gha"], commits
+    # )
     return {
         "commits": commits,
         "bazel_events": macos_bazel_events + build_events,
         "buildkite_status": buildkite_parsed,
-        "gha_status": gha_status,
+        # "gha_status": gha_status,
         "pr_build_time": pr_build_time,
     }
 
@@ -94,8 +94,8 @@ async def etl_process(ctx, cache_dir, db_path):
     print("[3/n] Writing buildkite")
     db.write_buildkite_data(loaded["buildkite_status"])
     db.write_buildkite_pr_time(loaded["pr_build_time"])
-    print("[4/n] Writing github action")
-    db.write_gha_data(loaded["gha_status"])
+    # print("[4/n] Writing github action")
+    # db.write_gha_data(loaded["gha_status"])
     print("[5/n] fixing data with backfill")
     db.backfill_test_owners()
 
