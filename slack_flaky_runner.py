@@ -10,7 +10,10 @@ db = sqlite3.connect("./results.db")
 top_failed_tests = list(
     db.execute(
         """
-SELECT test_name, COUNT(*) as failed_count
+SELECT
+  test_name,
+  MIN(commits.idx) as most_recent_failure
+  COUNT(*) as failed_count
 FROM test_result, commits
 WHERE test_result.sha == commits.sha
   AND status == 'FAILED'
@@ -26,7 +29,10 @@ if len(top_failed_tests) == 0:
     sys.exit(0)
 
 markdown_lines = ["🚓 Your Flaky Test Report of the Day (posted 9AM each weekday)"]
-for name, count in top_failed_tests:
+for name, most_recent, count in top_failed_tests:
+    if most_recent > 2:
+        # Most recent 3 runs have been successful. Test may have been fixed.
+        continue
     markdown_lines.append(f"- `{name}` failed *{count}* times over latest 20 tests.")
 markdown_lines.append("Go to https://flakey-tests.ray.io/ to view Travis links")
 slack_url = os.environ["SLACK_WEBHOOK"]
