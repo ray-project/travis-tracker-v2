@@ -17,6 +17,8 @@ jobs:
         python-version: 3.8
     - name: Use Node.js
       uses: actions/setup-node@v1
+      with:
+        node-version: 16
     # Setup javascript package caches
     # https://github.com/actions/cache/blob/master/examples.md#node---yarn
     - name: Get yarn cache directory path
