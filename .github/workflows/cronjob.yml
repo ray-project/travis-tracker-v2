@@ -44,6 +44,9 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         BUILDKITE_TOKEN: ${{ secrets.BUILDKITE_TOKEN }}
+        # To prevent gatsby build run out of memory
+        GATSBY_CPU_COUNT: "1"
+        NODE_OPTIONS: "--max-old-space-size=5120"
       run: |
         make site
     - name: Upload site
