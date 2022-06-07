@@ -55,8 +55,8 @@ def get_latest_commit() -> List[GHCommit]:
             ),
             message=data["commit"]["message"].split("\n")[0],
             html_url=data["html_url"],
-            author_login=data["author"]["login"],
-            author_avatar_url=data["author"]["avatar_url"],
+            author_login=(data["author"] or {}).get("login", "unknown"),
+            author_avatar_url=(data["author"] or {}).get("avatar_url", ""),
         )
         for data in json_data
     ]
