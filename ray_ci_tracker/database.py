@@ -137,30 +137,30 @@ class ResultsDBWriter:
     def write_buildkite_data(self, buildkite_data: List[BuildkiteStatus]):
         records_to_insert = []
         for job in buildkite_data:
-            num_result = self.table.execute(
-                f"SELECT COUNT(*) FROM test_result WHERE job_id == (?)",
-                (job.job_id,),
-            ).fetchone()[0]
+            # num_result = self.table.execute(
+            #     f"SELECT COUNT(*) FROM test_result WHERE job_id == (?)",
+            #     (job.job_id,),
+            # ).fetchone()[0]
             status = "PASSED" if job.passed else "FAILED"
-            if job.state == "FINISHED":
-                records_to_insert.append(
-                    (
-                        f"bk://{job.label}",
-                        # Mark the entire build passed when individual tests result uploaded
-                        # status if num_result == 0 else "PASSED",
-                        # NOTE: we are no longer doing the previous conditional approach because
-                        # there can be test harness issue _after_ a single test uploaded.
-                        status,
-                        job.label,
-                        "linux",
-                        job.url,
-                        job.job_id,
-                        job.commit,
-                        job.get_duration_s(),
-                        False,  # is_labeled_flaky
-                        "infra",  # owner
-                    )
+            # if job.state == "FINISHED":
+            records_to_insert.append(
+                (
+                    f"bk://{job.label}",
+                    # Mark the entire build passed when individual tests result uploaded
+                    # status if num_result == 0 else "PASSED",
+                    # NOTE: we are no longer doing the previous conditional approach because
+                    # there can be test harness issue _after_ a single test uploaded.
+                    status,
+                    job.label,
+                    "linux",
+                    job.url,
+                    job.job_id,
+                    job.commit,
+                    job.get_duration_s(),
+                    False,  # is_labeled_flaky
+                    "infra",  # owner
                 )
+            )
         self.table.executemany(
             "INSERT INTO test_result VALUES (?,?,?,?,?,?,?,?,?,?)",
             records_to_insert,
