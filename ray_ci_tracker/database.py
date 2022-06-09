@@ -147,7 +147,10 @@ class ResultsDBWriter:
                     (
                         f"bk://{job.label}",
                         # Mark the entire build passed when individual tests result uploaded
-                        status if num_result == 0 else "PASSED",
+                        # status if num_result == 0 else "PASSED",
+                        # NOTE: we are no longer doing the previous conditional approach because
+                        # there can be test harness issue _after_ a single test uploaded.
+                        status,
                         job.label,
                         "linux",
                         job.url,
