@@ -93,3 +93,14 @@ export interface GHAJobStat {
     url: string;
     duration_s: number;
 }
+
+export interface BuildkitePRBuildTime {
+    commit: string;
+    created_by: string;
+    state: string;
+    url: string;
+    created_at: string;
+    started_at: string | null;
+    finished_at: string | null;
+    pull_id: string;
+}
