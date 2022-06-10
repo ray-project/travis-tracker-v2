@@ -28,7 +28,7 @@ query AllPipelinesQuery {
           startedAt
           finishedAt
           number
-          jobs(first: 200) {
+          jobs(first: 500) {
             edges {
               node {
                 ... on JobTypeCommand {
