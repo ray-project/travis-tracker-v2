@@ -34,6 +34,7 @@ export interface SiteTravisLink {
     build_env: string;
     job_url: string;
     os: string;
+    status: string;
 }
 
 export interface SiteCommitTooltip {

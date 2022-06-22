@@ -60,10 +60,11 @@ const App: React.FC<PageProps<DataProps>> = ({ data, location }) => {
         style={{paddingTop: "1%"}}
         defaultValue={ownerSelection}
       >
-        <Radio.Button value="all"><Link to={"/?owner=all"}>team:all</Link></Radio.Button>
+        <Link to={"/?owner=all"}><Radio.Button value="all">team:all</Radio.Button></Link>
         {displayData.test_owners.map((owner) => (
+          <Link to={"/?owner="+owner}>
           <Radio.Button value={owner}>
-            <Link to={"/?owner="+owner}>{owner}</Link></Radio.Button>
+            {owner}</Radio.Button></Link>
         ))}
       </Radio.Group>
 

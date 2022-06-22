@@ -59,6 +59,7 @@ class SiteTravisLink(Mixin):
     build_env: str
     job_url: str
     os: str
+    status: str
 
 
 @dataclass

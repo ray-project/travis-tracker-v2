@@ -606,10 +606,10 @@ class ResultsDB:
         cursor = self.table.execute(
             """
             -- Travis Link
-            SELECT commits.sha, commits.unix_time, commits.message, build_env, job_url, os
+            SELECT commits.sha, commits.unix_time, commits.message, build_env, job_url, os, status
             FROM test_result, commits
             WHERE test_result.sha == commits.sha
-            AND status == 'FAILED'
+            AND status in ('FAILED', 'FLAKY')
             AND test_name == (?)
             ORDER BY commits.idx
             """,
@@ -623,8 +623,9 @@ class ResultsDB:
                 build_env=env,
                 job_url=url,
                 os=os,
+                status=status
             )
-            for sha, unix_time, msg, env, url, os in cursor.fetchall()
+            for sha, unix_time, msg, env, url, os, status in cursor.fetchall()
         ]
 
     def get_recent_build_time_stats(self, test_name: str) -> Optional[List[float]]:

@@ -1,6 +1,7 @@
-import React from "react";
-import { Modal, Typography } from "antd";
+import React, { useState } from "react";
+import { Modal, Switch, Typography } from "antd";
 import { SiteTravisLink } from "../interface";
+import "./segment.css";
 
 interface Prop {
   testName: string;
@@ -10,7 +11,14 @@ interface Prop {
 }
 
 const DetailModal: React.FC<Prop> = ({ testName, links, visible, onClose }) => {
+
+  const [showFlaky, setShowFlaky] = useState<boolean>(false);
+  if (!showFlaky) {
+    links = links.filter(l=>l.status == "FAILED");
+  }
+
   return (
+
     <Modal
       visible={visible}
       onCancel={onClose}
@@ -18,15 +26,20 @@ const DetailModal: React.FC<Prop> = ({ testName, links, visible, onClose }) => {
       width="80%"
       title={
         <React.Fragment>
-          <div>Travis Links (Newest to Oldest)</div>
+          <div>Buildkite Links (Newest to Oldest)</div>
           <Typography.Paragraph copyable style={{ marginBottom: "0em" }}>
             {testName}
           </Typography.Paragraph>
         </React.Fragment>
       }
     >
+
+    <Switch defaultChecked={false} onChange={setShowFlaky}></Switch> Show Flaky Tests
+    <p></p>
+
       {links.map((link) => (
         <>
+          {link.status == "FLAKY" ? <div className="item flaky" ></div> : <div className="item failed"></div>}
           <p>
             {link.sha_short} {link.commit_message} [
             {(
