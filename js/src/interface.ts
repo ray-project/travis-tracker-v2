@@ -16,6 +16,7 @@ export interface TestResult {
     total_duration_s: number;
     is_labeled_flaky: boolean;
     owner: string;
+    is_labeled_staging: boolean;
 }
 
 export interface BuildResult {

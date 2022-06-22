@@ -39,6 +39,7 @@ class TestResult(Mixin):
     total_duration_s: float
     is_labeled_flaky: bool
     owner: str
+    is_labeled_staging: bool
 
 
 @dataclass

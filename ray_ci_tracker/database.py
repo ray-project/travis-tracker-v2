@@ -43,7 +43,8 @@ class ResultsDBWriter:
             sha TEXT,
             test_duration_s REAL,
             is_labeled_flaky BOOLEAN,
-            owner TEXT
+            owner TEXT,
+            is_staging_test BOOLEAN
         );
 
         DROP TABLE IF EXISTS commits;
@@ -110,11 +111,12 @@ class ResultsDBWriter:
                         test.total_duration_s,
                         test.is_labeled_flaky,
                         test.owner,
+                        test.is_labeled_staging,
                     )
                 )
 
         self.table.executemany(
-            "INSERT INTO test_result VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO test_result VALUES (?,?,?,?,?,?,?,?,?,?, ?)",
             records_to_insert,
         )
         self.table.commit()
@@ -156,10 +158,11 @@ class ResultsDBWriter:
                         job.get_duration_s(),
                         False,  # is_labeled_flaky
                         "infra",  # owner
+                        False,  # is_labeled_staging
                     )
                 )
         self.table.executemany(
-            "INSERT INTO test_result VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO test_result VALUES (?,?,?,?,?,?,?,?,?,?, ?)",
             records_to_insert,
         )
         self.table.commit()
@@ -187,10 +190,11 @@ class ResultsDBWriter:
                         gha_run.duration_s,
                         False,  # is_labeled_flaky
                         "infra",  # owner
+                        False,  # is_labeled_staging
                     )
                 )
         self.table.executemany(
-            "INSERT INTO test_result VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO test_result VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             records_to_insert,
         )
         self.table.commit()
@@ -390,6 +394,7 @@ class ResultsDBReader:
                 SELECT SUM(status == 'FAILED') == 0 as green
                 FROM test_result, commits
                 WHERE test_result.sha == commits.sha
+                  AND test_result.is_staging_test == FALSE
                 GROUP BY test_result.sha
                 ORDER BY commits.idx
             )
@@ -404,6 +409,7 @@ class ResultsDBReader:
                 WHERE test_result.sha == commits.sha
                   AND test_result.is_labeled_flaky == 0
                   AND test_result.os NOT LIKE 'windows'
+                  AND test_result.is_staging_test == FALSE
                 GROUP BY commits.sha
                 ORDER BY commits.idx
             )
@@ -417,6 +423,7 @@ class ResultsDBReader:
                 FROM test_result, commits
                 WHERE test_result.sha == commits.sha
                   AND test_result.os NOT LIKE 'windows'
+                  AND test_result.is_staging_test == FALSE
                 GROUP BY test_result.sha
                 ORDER BY commits.idx
             )

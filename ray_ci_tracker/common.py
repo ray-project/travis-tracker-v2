@@ -82,6 +82,7 @@ def _yield_test_result(bazel_log_path):
     # Gather the known flaky set and test owners
     flaky_tests = set()
     test_owners = dict()
+    is_staging_tests = False
     with open(bazel_log_path) as f:
         for line in f:
             loaded = json.loads(line)
@@ -92,6 +93,15 @@ def _yield_test_result(bazel_log_path):
                         flaky_tests.add(test_name)
                     if tag.startswith("team:"):
                         test_owners[test_name] = tag.replace("team:", "")
+            if (
+                "configuration" in loaded["id"]
+                and "makeVariable" in loaded["configuration"]
+            ):
+                if (
+                    loaded["configuration"]["makeVariable"].get("RAY_STAGING_TESTS")
+                    == "1"
+                ):
+                    is_staging_tests = True
 
     with open(bazel_log_path) as f:
         for line in f:
@@ -105,11 +115,12 @@ def _yield_test_result(bazel_log_path):
                     status = "FAILED"
                 duration_s = float(test_summary["totalRunDurationMillis"]) / 1e3
                 yield TestResult(
-                    name,
+                    name + (" (staging)" if is_staging_tests else ""),
                     status,
                     duration_s,
                     name in flaky_tests,
                     test_owners.get(name, "unknown"),
+                    is_staging_tests,
                 )
 
 
