@@ -1,4 +1,4 @@
-import { graphql, PageProps } from "gatsby";
+import { graphql, Link, PageProps } from "gatsby";
 import React, { useState } from "react";
 import { Button, Radio, Table } from "antd";
 import { QueryStateOpts, useQueryState } from "use-location-state";
@@ -27,20 +27,9 @@ type DataProps = {
   };
 };
 
-const App: React.FC<PageProps<DataProps>> = ({ data }) => {
+const App: React.FC<PageProps<DataProps>> = ({ data, location }) => {
   const [showAll, setShowAll] = useQueryState<boolean>("showAll", false);
-  const [compactMode, setCompactMode] = useQueryState<boolean>(
-    "compactMode",
-    false
-  );
-  const [ownerSelection, setOwnerSelection] = useQueryState<string>(
-    "owner",
-    "all"
-  );
-  const [sortByRuntime, setSortByRuntime] = useQueryState<boolean>(
-    "sortByRuntime",
-    false
-  );
+  const ownerSelection = new URLSearchParams(location.search).get("owner") || "all";
 
   const { dataSource, columns } = JSON.parse(displayData.table_stat);
   const numHidden = displayData.failed_tests.length - 100;
@@ -49,12 +38,8 @@ const App: React.FC<PageProps<DataProps>> = ({ data }) => {
   testsToDisplay = testsToDisplay.filter(
     (c) => ownerSelection === "all" || ownerSelection === c.owner
   );
-  if (sortByRuntime) {
-    // compare by p50
-    testsToDisplay = testsToDisplay.sort(
-      (a, b) => b.build_time_stats[1] - a.build_time_stats[1]
-    );
-  } else if (!showAll) {
+
+  if (!showAll) {
     testsToDisplay = testsToDisplay.slice(0, 100);
   }
 
@@ -72,32 +57,19 @@ const App: React.FC<PageProps<DataProps>> = ({ data }) => {
       ></Table>
 
       <Radio.Group
-        onChange={(e) => setOwnerSelection(e.target.value)}
+        style={{paddingTop: "1%"}}
         defaultValue={ownerSelection}
       >
-        <Radio.Button value="all">team:all</Radio.Button>
+        <Radio.Button value="all"><Link to={"/?owner=all"}>team:all</Link></Radio.Button>
         {displayData.test_owners.map((owner) => (
-          <Radio.Button value={owner}>{owner}</Radio.Button>
+          <Radio.Button value={owner}>
+            <Link to={"/?owner="+owner}>{owner}</Link></Radio.Button>
         ))}
       </Radio.Group>
 
-      <Button
-        style={{ margin: "12px" }}
-        type={"default"}
-        onClick={() => setCompactMode((val) => !val)}
-      >
-        Toggle Compact Mode
-      </Button>
-      <Button
-        style={{ margin: "12px" }}
-        type={"default"}
-        onClick={() => setSortByRuntime((val) => !val)}
-      >
-        Toggle Sort by Runtime
-      </Button>
 
       {testsToDisplay.map((c) => (
-        <TestCase case={c} compact={compactMode}></TestCase>
+        <TestCase case={c} compact={false}></TestCase>
       ))}
 
       {numHidden > 0 && (

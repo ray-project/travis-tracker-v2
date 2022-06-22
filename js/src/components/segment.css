@@ -2,7 +2,7 @@
   height: 16px;
   width: 16px;
   /* border: 1px solid grey; */
-  background-color: rgb(40, 167, 69, 0.8);
+  background-color: rgba(71, 190, 99, 0.8);
   border-radius: 1px;
   margin-right: 1px;
   float: left;
@@ -10,11 +10,11 @@
 }
 
 .failed {
-  background-color: rgb(220, 53, 69, 0.8);
+  background-color: rgba(211, 76, 90, 0.8);
 }
 
 .flaky {
-  background-color: rgb(250, 218, 94, 0.8);
+  background-color: rgba(235, 205, 88, 0.8);
 }
 
 .not-found {

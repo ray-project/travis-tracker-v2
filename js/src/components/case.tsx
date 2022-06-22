@@ -27,7 +27,7 @@ const TestCase: React.FC<Prop> = (props) => {
       {!props.compact && (
         <button
           style={{
-            backgroundColor: "rgba(192,192,192,0.3)",
+            backgroundColor: "rgba(220,220,220,0.3)",
             margin: "8px",
             marginTop: "16px",
             padding: "8px",

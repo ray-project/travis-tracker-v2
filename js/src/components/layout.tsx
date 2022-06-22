@@ -12,7 +12,8 @@ const LayoutWrapper: React.FC = (props) => (
     </Helmet>
     <Content
       style={{
-        padding: "5%",
+        padding: "4%",
+        paddingTop: "0.5%",
         backgroundColor: "white",
         alignContent: "center",
       }}
