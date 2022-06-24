@@ -32,9 +32,15 @@ const regex = /DataCaseName-(.+)-END/;
 
 const App: React.FC<PageProps<DataProps>> = ({ data, location }) => {
   const [showAll, setShowAll] = useQueryState<boolean>("showAll", false);
-  const ownerSelection = new URLSearchParams(location.search).get("owner") || "all";
+  const [ownerSelection, setOwnerSelection] = useState<string>("all");
   const [githubData, setGitHubData] = useState<Map<string, any>>(new Map());
   const [releaseTestOnly, setReleaseTestOnly] = useState<boolean>(false);
+
+  useEffect(
+    () => {
+      setOwnerSelection(new URLSearchParams(location.search).get("owner") || "all")
+    }
+  );
 
 
   useMemo(
@@ -83,13 +89,14 @@ const App: React.FC<PageProps<DataProps>> = ({ data, location }) => {
 
       <Radio.Group
         style={{ paddingTop: "1%" }}
-        defaultValue={ownerSelection}
       >
         <Link to={"/?owner=all"}><Radio.Button value="all">team:all</Radio.Button></Link>
         {displayData.test_owners.map((owner) => (
           <Link to={"/?owner=" + owner} key={owner}>
             <Radio.Button value={owner}>
-              {owner}</Radio.Button></Link>
+              {owner}
+            </Radio.Button>
+          </Link>
         ))}
       </Radio.Group>
 
