@@ -277,6 +277,12 @@ class ResultsDBReader:
             prioritization[test_name] += score * 1_000_000  # Prioritize recent failure.
 
         for test_name, score in failed_tests:
+            if "release://" in test_name:
+                prioritization[test_name] += (
+                    score * 1_000
+                )  # Prioritize release tests failure
+
+        for test_name, score in failed_tests:
             prioritization[test_name] += score
 
         # for test_name, score in green_flaky_tests:

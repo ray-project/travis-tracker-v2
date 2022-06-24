@@ -5,6 +5,7 @@ import ujson as json
 
 from ray_ci_tracker.common import run_as_sync
 from ray_ci_tracker.data_source.buildkite import BuildkiteSource
+from ray_ci_tracker.data_source.buildkite_release import BuildkiteReleaseSource
 from ray_ci_tracker.data_source.github import GithubDataSource
 from ray_ci_tracker.data_source.s3 import S3DataSource
 from ray_ci_tracker.database import ResultsDBReader, ResultsDBWriter
@@ -15,6 +16,7 @@ from ray_ci_tracker.interfaces import SiteDisplayRoot, SiteFailedTest
 @click.option("--cached-github/--no-cached-github", default=True)
 @click.option("--cached-s3/--no-cached-s3", default=True)
 @click.option("--cached-buildkite/--no-cached-buildkite", default=True)
+@click.option("--cached-buildkite-release/--no-cached-buildkite-release", default=True)
 @click.option("--cached-gha/--no-cached-gha", default=True)
 @click.pass_context
 def cli(
@@ -22,12 +24,14 @@ def cli(
     cached_github: bool,
     cached_s3: bool,
     cached_buildkite: bool,
+    cached_buildkite_release: bool,
     cached_gha: bool,
 ):
     ctx.ensure_object(dict)
     ctx.obj["cached_github"] = cached_github
     ctx.obj["cached_s3"] = cached_s3
     ctx.obj["cached_buildkite"] = cached_buildkite
+    ctx.obj["cached_buildkite_release"] = cached_buildkite
     ctx.obj["cached_gha"] = cached_gha
 
 
@@ -55,15 +59,18 @@ async def _downloader(
         cache_path, ctx.obj["cached_buildkite"], commits
     )
 
-    # print("💻 Downloading Github Action Status")
-    # gha_status = await GithubDataSource.fetch_all(
-    #     cache_path, ctx.obj["cached_gha"], commits
-    # )
+    print("💻 Downloading Files from Buildkite Release Tests")
+    buildkite_release_result = await BuildkiteReleaseSource.fetch_all(
+        cache_path, ctx.obj["cached_buildkite_release"], commits
+    )
+    buildkite_release_result = list(
+        filter(lambda r: r is not None, buildkite_release_result)
+    )
+
     return {
         "commits": commits,
-        "bazel_events": macos_bazel_events + build_events,
+        "bazel_events": macos_bazel_events + build_events + buildkite_release_result,
         "buildkite_status": buildkite_parsed,
-        # "gha_status": gha_status,
         "pr_build_time": pr_build_time,
     }
 

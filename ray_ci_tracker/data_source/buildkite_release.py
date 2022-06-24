@@ -1,9 +1,11 @@
 import asyncio
 import functools
+import json
 import os
 from itertools import chain
 from pathlib import Path
-from typing import List, Optional
+import re
+from typing import Dict, List, Optional
 
 import aiofiles
 import httpx
@@ -12,14 +14,14 @@ from tqdm.asyncio import tqdm_asyncio
 from ray_ci_tracker.common import _process_single_build, get_or_fetch, retry
 from ray_ci_tracker.interfaces import (
     BuildkiteArtifact,
-    BuildkitePRBuildTime,
     BuildkiteStatus,
     BuildResult,
+    TestResult,
 )
 
 GRAPHQL_QUERY = """
-query AllPipelinesQuery {
-  pipeline(slug: "ray-project/ray-builders-branch") {
+query ReleaseTestQuery {
+  pipeline(slug: "ray-project/release-tests-branch") {
     builds(branch: "master", commit: "COMMIT_PLACEHODLER") {
       count
       edges {
@@ -63,45 +65,8 @@ query AllPipelinesQuery {
 }
 """
 
-PR_TIME_QUERY = """
-query PRTimeQuery {
-  pipeline(slug: "ray-project/ray-builders-pr") {
-    builds(first: 500) {
-      edges {
-        node {
-          commit
-          createdAt
-          createdBy {
-            ... on User {
-              userName: name
-            }
-            ... on UnregisteredUser {
-              unregisteredUserName: name
-            }
-          }
-          canceledAt
-          canceledBy {
-            ... on User {
-              userName: name
-            }
-          }
-          finishedAt
-          message
-          pullRequest {
-            id
-          }
-          startedAt
-          state
-          url
-        }
-      }
-    }
-  }
-}
-"""
 
-
-class BuildkiteSource:
+class BuildkiteReleaseSource:
     @staticmethod
     async def fetch_all(cache_path: Path, cached_buildkite, commits):
         print("Downloading Buildkite Status (Jobs)")
@@ -109,12 +74,12 @@ class BuildkiteSource:
         buildkite_jsons = await tqdm_asyncio.gather(
             *[
                 get_or_fetch(
-                    cache_path / f"bk_jobs/{commit.sha}/http_resp.json",
+                    cache_path / f"bk_release_jobs/{commit.sha}/http_resp.json",
                     use_cached=cached_buildkite,
                     result_cls=None,
                     many=False,
                     async_func=functools.partial(
-                        BuildkiteSource.get_buildkite_job_status,
+                        BuildkiteReleaseSource.get_buildkite_job_status,
                         commit_sha=commit.sha,
                         concurrency_limiter=concurrency_limiter,
                     ),
@@ -125,12 +90,12 @@ class BuildkiteSource:
         buildkite_parsed: List[BuildkiteStatus] = await asyncio.gather(
             *[
                 get_or_fetch(
-                    cache_path / f"bk_jobs/{commit.sha}/parsed.json",
+                    cache_path / f"bk_release_jobs/{commit.sha}/parsed.json",
                     use_cached=cached_buildkite,
                     result_cls=BuildkiteStatus,
                     many=True,
                     async_func=functools.partial(
-                        BuildkiteSource.parse_buildkite_build_json,
+                        BuildkiteReleaseSource.parse_buildkite_build_json,
                         resp_json,
                     ),
                 )
@@ -139,50 +104,33 @@ class BuildkiteSource:
         )
         print("Downloading Buildkite Artifacts")
 
-        def contains_bad_commit(status: BuildkiteStatus):
-            return status.commit in {
-                "5985c1902dc24236e15757f42d899b0c0bc5b5d4",
-                "893f57591df7cb7b1fb4fed9978604964123eead",
-            }
-
-        macos_bazel_events = await tqdm_asyncio.gather(
+        artifact_data = await tqdm_asyncio.gather(
             *[
                 get_or_fetch(
                     cache_path
-                    / f"bazel_cached/{status.commit}/mac_result_{status.job_id}.json",
+                    / f"bk_release_jobs/{status.commit}/release_result_{status.job_id}.json",
                     use_cached=cached_buildkite,
                     result_cls=BuildResult,
                     many=False,
                     async_func=functools.partial(
-                        BuildkiteSource.get_buildkite_artifact,
+                        BuildkiteReleaseSource.get_buildkite_artifact,
                         dir_prefix=cache_path,
                         artifacts=status.artifacts,
                         concurrency_limiter=asyncio.Semaphore(50),
                     ),
                 )
                 for status in chain.from_iterable(buildkite_parsed)
-                if len(status.artifacts) > 0 and not contains_bad_commit(status)
+                if len(status.artifacts) > 0
             ]
         )
-        print("Fetching Buildkite PR Time")
-        pr_build_times = await get_or_fetch(
-            cache_path / f"bk_pr_time/result.json",
-            use_cached=cached_buildkite,
-            result_cls=BuildkitePRBuildTime,
-            many=True,
-            async_func=BuildkiteSource.get_buildkite_pr_buildtime,
-        )
-        return (
-            list(chain.from_iterable(buildkite_parsed)),
-            macos_bazel_events,
-            pr_build_times,
-        )
+
+        return artifact_data
 
     @staticmethod
     @retry
     async def get_buildkite_job_status(
         commit_sha, concurrency_limiter: asyncio.Semaphore
-    ):
+    ) -> Dict:
         http_client = httpx.AsyncClient(timeout=httpx.Timeout(60))
         async with concurrency_limiter, http_client:
             resp = await http_client.post(
@@ -204,6 +152,8 @@ class BuildkiteSource:
             jobs = build["node"]["jobs"]["edges"]
             for job in jobs:
                 actual_job = job["node"]
+                if actual_job == {}:
+                    continue
                 job_id = actual_job["uuid"]
                 sha = actual_job["build"]["commit"]
 
@@ -211,9 +161,11 @@ class BuildkiteSource:
                 for artifact in actual_job["artifacts"]["edges"]:
                     url = artifact["node"]["downloadURL"]
                     path = artifact["node"]["path"]
-                    if "bazel_event_logs" in path:
+                    if ".json" in path:
                         filename = os.path.split(path)[1]
-                        on_disk_path = f"bazel_events/master/{sha}/{job_id}/{filename}"
+                        on_disk_path = (
+                            f"release_test_json/master/{sha}/{job_id}/{filename}"
+                        )
                         artifacts.append(
                             BuildkiteArtifact(
                                 url=url,
@@ -263,34 +215,36 @@ class BuildkiteSource:
                             await f.write(chunk)
 
         assert bazel_events_dir is not None
-        return _process_single_build(bazel_events_dir)
+        if not os.path.exists(os.path.join(bazel_events_dir, "result.json")):
+            return None
 
-    @staticmethod
-    @retry
-    async def get_buildkite_pr_buildtime() -> List[BuildkitePRBuildTime]:
-        http_client = httpx.AsyncClient(timeout=httpx.Timeout(60))
-        async with http_client:
-            resp = await http_client.post(
-                "https://graphql.buildkite.com/v1",
-                headers={"Authorization": f"Bearer {os.environ['BUILDKITE_TOKEN']}"},
-                json={"query": PR_TIME_QUERY},
-            )
-        resp.raise_for_status()
-        builds = resp.json()["data"]["pipeline"]["builds"]["edges"]
-        return [
-            BuildkitePRBuildTime(
-                commit=build["node"]["commit"],
-                created_by=list(
-                    build["node"].get("createdBy", {"_": "unknown"}).values()
-                )[0],
-                state=build["node"]["state"],
-                url=build["node"]["url"],
-                created_at=build["node"].get("createdAt"),
-                started_at=build["node"].get("startedAt"),
-                finished_at=build["node"].get("finishedAt"),
-                pull_id=build["node"].get("pullRequest", {"id": None}).get("id"),
-            )
-            for build in builds
-            if build["node"] is not None
-            and build["node"].get("pullRequest") is not None
-        ]
+        with open(os.path.join(bazel_events_dir, "result.json")) as f:
+            result_json = json.load(f)
+        with open(os.path.join(bazel_events_dir, "test_config.json")) as f:
+            config_json = json.load(f)
+
+        return BuildResult(
+            sha=artifacts[0].sha,
+            job_url=result_json["buildkite_url"],
+            os="",
+            build_env="",
+            job_id=artifacts[0].job_id,
+            results=[
+                TestResult(
+                    test_name="release://" + config_json["name"],
+                    status={
+                        "finished": "PASSED",
+                        "runtime_error": "FAILED",
+                        "infra_error": "FAILED",
+                        "infra_timeout": "FAILED",
+                        "timeout": "FAILED",
+                        "error": "FALED",
+                        "unknown error": "FAILED",
+                    }[result_json["status"]],
+                    total_duration_s=result_json["runtime"],
+                    is_labeled_flaky=False,
+                    owner=config_json["team"],
+                    is_labeled_staging=result_json["stable"],
+                )
+            ],
+        )

@@ -102,6 +102,8 @@ class SiteDisplayRoot(Mixin):
 class BuildkiteArtifact(Mixin):
     url: str
     bazel_events_path: str
+    job_id: str
+    sha: str
 
 
 @dataclass
