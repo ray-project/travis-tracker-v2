@@ -30,6 +30,7 @@ export interface BuildResult {
 
 export interface SiteTravisLink {
     sha_short: string;
+    sha: string;
     commit_time: number;
     commit_message: string;
     build_env: string;
@@ -72,6 +73,8 @@ export interface SiteDisplayRoot {
 export interface BuildkiteArtifact {
     url: string;
     bazel_events_path: string;
+    job_id: string;
+    sha: string;
 }
 
 export interface BuildkiteStatus {

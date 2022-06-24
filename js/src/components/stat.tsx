@@ -10,7 +10,7 @@ const StatsPane: React.FC<Prop> = ({ stats }) => (
   <div style={{ paddingTop: "32px" }}>
     <Row justify="space-around">
       {stats.map((s) => (
-        <Col>
+        <Col key={s.key}>
           <Statistic
             title={s.key}
             value={s.value.toFixed(0)}

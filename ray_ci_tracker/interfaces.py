@@ -55,6 +55,7 @@ class BuildResult(Mixin):
 @dataclass
 class SiteTravisLink(Mixin):
     sha_short: str
+    sha: str
     commit_time: int
     commit_message: str
     build_env: str

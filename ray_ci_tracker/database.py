@@ -313,6 +313,7 @@ class ResultsDBReader:
         return [
             SiteTravisLink(
                 sha_short=sha[:6],
+                sha=sha,
                 commit_time=unix_time,
                 commit_message=msg,
                 build_env=env,

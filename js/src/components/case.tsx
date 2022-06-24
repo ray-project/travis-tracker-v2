@@ -1,13 +1,15 @@
-import React, { useState } from "react";
+import React, { useContext, useState } from "react";
 import { Col, Row, Typography } from "antd";
 import { BugFilled } from "@ant-design/icons";
 import { SiteCommitTooltip, SiteFailedTest } from "../interface";
 import SegmentedBar from "./segment";
 import DetailModal from "./detail";
+import githubIcon from "../static/github-icon.png";
 
 interface Prop {
   case: SiteFailedTest;
   compact: boolean;
+  githubState: Map<string, any>;
 }
 
 const getRate = (
@@ -22,6 +24,8 @@ const getRate = (
 
 const TestCase: React.FC<Prop> = (props) => {
   const [showModal, setShowModal] = useState(false);
+  const githubUrlState = props.githubState.get(props.case.name)
+
   return (
     <>
       {!props.compact && (
@@ -47,10 +51,18 @@ const TestCase: React.FC<Prop> = (props) => {
 
             <Col flex="auto"></Col>
 
-            {props.case.build_time_stats && (
+            {githubUrlState &&
+              <Col span={2}>
+                <img src={githubIcon} height={"18px"}></img>
+                {" "}
+                {githubUrlState.state === "open" ? "🚧" : "✅"}
+              </Col>
+            }
+
+            {/* {props.case.build_time_stats && (
               // Median build time
-              <Col span={3}>⏱{props.case.build_time_stats[1].toFixed(2)}s</Col>
-            )}
+              <Col span={2}>⏱{props.case.build_time_stats[1].toFixed(2)}s</Col>
+            )} */}
 
             <Col span={3}>
               <div className="item failed" style={{ marginTop: "3px" }}></div>
@@ -84,6 +96,7 @@ const TestCase: React.FC<Prop> = (props) => {
           visible={showModal}
           links={props.case.travis_links}
           onClose={() => setShowModal(false)}
+          githubState={props.githubState}
         ></DetailModal>
       )}
     </>

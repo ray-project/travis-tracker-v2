@@ -25,6 +25,7 @@ const SegmentedBar: React.FC<Prop> = ({ commits, prefix }) => {
 
         return (
           <Tooltip
+            key={c.commit_url}
             color="#FFFFFF"
             title={
               <p>

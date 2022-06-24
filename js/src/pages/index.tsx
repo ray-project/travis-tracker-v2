@@ -1,5 +1,5 @@
 import { graphql, Link, PageProps } from "gatsby";
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Button, Radio, Table } from "antd";
 import { QueryStateOpts, useQueryState } from "use-location-state";
 
@@ -27,9 +27,27 @@ type DataProps = {
   };
 };
 
+
+const regex = /DataCaseName-(.+)-END/;
+
 const App: React.FC<PageProps<DataProps>> = ({ data, location }) => {
   const [showAll, setShowAll] = useQueryState<boolean>("showAll", false);
   const ownerSelection = new URLSearchParams(location.search).get("owner") || "all";
+  const [githubData, setGitHubData] = useState<Map<string, any>>(new Map());
+  console.log("GithubData", githubData)
+
+
+  useMemo(
+    () => fetch("https://api.github.com/repos/ray-project/ray/issues?labels=flaky-tracker&state=all&per_page=100")
+      .then(resp => resp.json())
+      .then(data => {
+        console.log(data)
+        const newData = new Map<string, any>(data.map(issue => [issue.body.match(regex)?.at(1), { url: issue.html_url, state: issue.state }]));
+        setGitHubData(newData);
+      }),
+    []
+  );
+
 
   const { dataSource, columns } = JSON.parse(displayData.table_stat);
   const numHidden = displayData.failed_tests.length - 100;
@@ -44,6 +62,7 @@ const App: React.FC<PageProps<DataProps>> = ({ data, location }) => {
   }
 
   return (
+
     <LayoutWrapper>
       <Title></Title>
 
@@ -57,20 +76,20 @@ const App: React.FC<PageProps<DataProps>> = ({ data, location }) => {
       ></Table>
 
       <Radio.Group
-        style={{paddingTop: "1%"}}
+        style={{ paddingTop: "1%" }}
         defaultValue={ownerSelection}
       >
         <Link to={"/?owner=all"}><Radio.Button value="all">team:all</Radio.Button></Link>
         {displayData.test_owners.map((owner) => (
-          <Link to={"/?owner="+owner}>
-          <Radio.Button value={owner}>
-            {owner}</Radio.Button></Link>
+          <Link to={"/?owner=" + owner} key={owner}>
+            <Radio.Button value={owner}>
+              {owner}</Radio.Button></Link>
         ))}
       </Radio.Group>
 
 
       {testsToDisplay.map((c) => (
-        <TestCase case={c} compact={false}></TestCase>
+        <TestCase key={c.name} case={c} compact={false} githubState={githubData}></TestCase>
       ))}
 
       {numHidden > 0 && (
