@@ -93,6 +93,7 @@ const TestCase: React.FC<Prop> = (props) => {
       {!props.compact && (
         <DetailModal
           testName={props.case.name}
+          owner={props.case.owner}
           visible={showModal}
           links={props.case.travis_links}
           onClose={() => setShowModal(false)}

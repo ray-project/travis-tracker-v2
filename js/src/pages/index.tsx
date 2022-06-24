@@ -1,6 +1,6 @@
 import { graphql, Link, PageProps } from "gatsby";
 import React, { useEffect, useMemo, useState } from "react";
-import { Button, Radio, Table } from "antd";
+import { Button, Radio, Switch, Table } from "antd";
 import { QueryStateOpts, useQueryState } from "use-location-state";
 
 import LayoutWrapper from "../components/layout";
@@ -34,7 +34,7 @@ const App: React.FC<PageProps<DataProps>> = ({ data, location }) => {
   const [showAll, setShowAll] = useQueryState<boolean>("showAll", false);
   const ownerSelection = new URLSearchParams(location.search).get("owner") || "all";
   const [githubData, setGitHubData] = useState<Map<string, any>>(new Map());
-  console.log("GithubData", githubData)
+  const [releaseTestOnly, setReleaseTestOnly] = useState<boolean>(false);
 
 
   useMemo(
@@ -50,16 +50,22 @@ const App: React.FC<PageProps<DataProps>> = ({ data, location }) => {
 
 
   const { dataSource, columns } = JSON.parse(displayData.table_stat);
-  const numHidden = displayData.failed_tests.length - 100;
 
   let testsToDisplay = displayData.failed_tests;
   testsToDisplay = testsToDisplay.filter(
     (c) => ownerSelection === "all" || ownerSelection === c.owner
   );
 
+  if (releaseTestOnly) {
+    testsToDisplay = testsToDisplay.filter(t => t.name.indexOf("release://") > 0);
+  }
+
+  let numHidden = 0;
   if (!showAll) {
+    numHidden = testsToDisplay.length - 100;
     testsToDisplay = testsToDisplay.slice(0, 100);
   }
+
 
   return (
 
@@ -86,6 +92,11 @@ const App: React.FC<PageProps<DataProps>> = ({ data, location }) => {
               {owner}</Radio.Button></Link>
         ))}
       </Radio.Group>
+
+      {"     "}
+
+      <Switch defaultChecked={false} onChange={setReleaseTestOnly}></Switch>
+      {"    Show Only Release Tests"}
 
 
       {testsToDisplay.map((c) => (

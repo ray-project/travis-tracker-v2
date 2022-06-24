@@ -6,6 +6,7 @@ import { Link } from "gatsby";
 
 interface Prop {
   testName: string;
+  owner: string;
   links: Array<SiteTravisLink>;
   visible: boolean;
   onClose: () => void;
@@ -17,7 +18,7 @@ const daysAgo = (t) => (
   (60 * 60 * 24)
 ).toFixed(0)
 
-const DetailModal: React.FC<Prop> = ({ testName, links, visible, onClose, githubState }) => {
+const DetailModal: React.FC<Prop> = ({ testName, owner, links, visible, onClose, githubState }) => {
 
   const [showFlaky, setShowFlaky] = useState<boolean>(false);
   if (!showFlaky) {
@@ -44,6 +45,9 @@ const DetailModal: React.FC<Prop> = ({ testName, links, visible, onClose, github
           <div>Buildkite Links (Newest to Oldest)</div>
           <Typography.Paragraph copyable style={{ marginBottom: "0em" }}>
             {testName}
+          </Typography.Paragraph>
+          <Typography.Paragraph>
+            owner: {owner}
           </Typography.Paragraph>
         </React.Fragment>
       }
