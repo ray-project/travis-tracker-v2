@@ -28,13 +28,19 @@ type DataProps = {
 };
 
 
+enum ReleaseTestOption {
+  NoReleaseTest = 1,
+  Mixed = 2,
+  OnlyReleaseTest = 3
+}
+
 const regex = /DataCaseName-(.+)-END/;
 
 const App: React.FC<PageProps<DataProps>> = ({ data, location }) => {
   const [showAll, setShowAll] = useQueryState<boolean>("showAll", false);
   const [ownerSelection, setOwnerSelection] = useState<string>("all");
   const [githubData, setGitHubData] = useState<Map<string, any>>(new Map());
-  const [releaseTestOnly, setReleaseTestOnly] = useState<boolean>(false);
+  const [releaseTestOption, setReleaseTestOption] = useState<ReleaseTestOption>(ReleaseTestOption.NoReleaseTest);
 
   useEffect(
     () => {
@@ -62,8 +68,10 @@ const App: React.FC<PageProps<DataProps>> = ({ data, location }) => {
     (c) => ownerSelection === "all" || ownerSelection === c.owner
   );
 
-  if (releaseTestOnly) {
+  if (releaseTestOption == ReleaseTestOption.OnlyReleaseTest) {
     testsToDisplay = testsToDisplay.filter(t => t.name.indexOf("release://") > 0);
+  } else if (releaseTestOption == ReleaseTestOption.NoReleaseTest) {
+    testsToDisplay = testsToDisplay.filter(t => t.name.indexOf("release://") == -1);
   }
 
   let numHidden = 0;
@@ -101,9 +109,14 @@ const App: React.FC<PageProps<DataProps>> = ({ data, location }) => {
       </Radio.Group>
 
       {"     "}
+      {"Show Release Tests"}
+      {"     "}
+      <Radio.Group onChange={e => setReleaseTestOption(e.target.value)} defaultValue={ReleaseTestOption.NoReleaseTest}>
+        <Radio.Button value={ReleaseTestOption.NoReleaseTest}>No</Radio.Button>
+        <Radio.Button value={ReleaseTestOption.Mixed}>Yes</Radio.Button>
+        <Radio.Button value={ReleaseTestOption.OnlyReleaseTest}>Only</Radio.Button>
+      </Radio.Group>
 
-      <Switch defaultChecked={false} onChange={setReleaseTestOnly}></Switch>
-      {"    Show Only Release Tests"}
 
 
       {testsToDisplay.map((c) => (
