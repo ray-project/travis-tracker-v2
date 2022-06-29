@@ -48,7 +48,11 @@ class S3DataSource:
                 stdout=PIPE,
                 stderr=PIPE,
             )
-            status = await proc.wait()
+            try:
+                status = await asyncio.wait_for(proc.wait(), timeout=60)
+            except asyncio.TimeoutError as e:
+                print(f"`aws s3 sync {s3_path} {download_dir}` timedout")
+                return []
             assert status == 0, await proc.communicate()
 
         lst = [
