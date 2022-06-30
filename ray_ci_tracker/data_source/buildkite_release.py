@@ -199,7 +199,7 @@ class BuildkiteReleaseSource:
         assert len(artifacts)
 
         bazel_events_dir = None
-        async with concurrency_limiter, httpx.AsyncClient() as client:
+        async with concurrency_limiter, httpx.AsyncClient(timeout=60) as client:
             for artifact in artifacts:
                 path = dir_prefix / artifact.bazel_events_path
 
