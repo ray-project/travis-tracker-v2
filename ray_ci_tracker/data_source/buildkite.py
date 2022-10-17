@@ -19,7 +19,7 @@ from ray_ci_tracker.interfaces import (
 
 GRAPHQL_QUERY = """
 query AllPipelinesQuery {
-  pipeline(slug: "ray-project/ray-builders-branch") {
+  pipeline(slug: "ray-project/oss-ci-build-branch") {
     builds(branch: "master", commit: "COMMIT_PLACEHODLER") {
       count
       edges {
