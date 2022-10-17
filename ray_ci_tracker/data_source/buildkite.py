@@ -204,6 +204,8 @@ class BuildkiteSource:
             jobs = build["node"]["jobs"]["edges"]
             for job in jobs:
                 actual_job = job["node"]
+                if not actual_job: # sometimes this can be empty
+                    continue
                 job_id = actual_job["uuid"]
                 sha = actual_job["build"]["commit"]
 
