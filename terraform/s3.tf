@@ -22,6 +22,34 @@ resource "aws_s3_bucket_cors_configuration" "perf_dashboards" {
     allowed_origins = ["*"]
   }
 }
+resource "aws_s3_bucket_policy" "perf_dashboards" {
+  bucket = aws_s3_bucket.perf_dashboards.id
+
+  policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Id": "Policy1513129229074",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "${aws_iam_user.site_uploader.arn}"
+            },
+            "Action": [
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:ListBucket",
+                "s3:PutObjectAcl"
+            ],
+            "Resource": [
+                "${aws_s3_bucket.perf_dashboards.arn}",
+                "${aws_s3_bucket.perf_dashboards.arn}/*"
+            ]
+        }
+    ]
+}
+EOF
+}
 
 # Job Logs bucket
 

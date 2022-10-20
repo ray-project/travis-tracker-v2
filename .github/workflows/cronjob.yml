@@ -51,7 +51,7 @@ jobs:
         DB_TOKEN: ${{ secrets.DB_TOKEN }}
       run: |
         python databricks-export-job.py
-        aws s3 cp serve.html s3://ray-perf-dashboards/serve/nightly.html
+        aws s3 cp --acl public-read serve.html s3://ray-perf-dashboards/serve/nightly.html
     - name: Post slack notification
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
