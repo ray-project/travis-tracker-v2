@@ -1,10 +1,26 @@
 # Account settings
 
 resource "aws_s3_account_public_access_block" "account" {
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
+  # block_public_acls       = true
+  # block_public_policy     = true
+  # ignore_public_acls      = true
+  # restrict_public_buckets = true
+}
+
+# Performance dashboard bucket
+
+resource "aws_s3_bucket" "perf_dashboards" {
+  bucket = "ray-perf-dashboards"
+  acl = "public-read"
+}
+
+resource "aws_s3_bucket_cors_configuration" "perf_dashboards" {
+  bucket = aws_s3_bucket.perf_dashboards.id
+
+  cors_rule {
+    allowed_methods = ["GET"]
+    allowed_origins = ["*"]
+  }
 }
 
 # Job Logs bucket
