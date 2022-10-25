@@ -44,6 +44,17 @@ query AllPipelinesQuery {
                   runnableAt
                   startedAt
                   finishedAt
+                  events(last: 50) {
+                    edges {
+                      node {
+                        ... on JobEventRetried {
+                          retriedInJob {
+                            uuid
+                          }
+                        }
+                      }
+                    }
+                  }
                   artifacts(first: 100) {
                     edges {
                       node {
@@ -204,10 +215,19 @@ class BuildkiteSource:
             jobs = build["node"]["jobs"]["edges"]
             for job in jobs:
                 actual_job = job["node"]
-                if not actual_job: # sometimes this can be empty
+                if not actual_job:  # sometimes this can be empty
                     continue
                 job_id = actual_job["uuid"]
                 sha = actual_job["build"]["commit"]
+
+                # We will not persist steps that are retried.
+                is_retried = False
+                for event in actual_job["events"]["edges"]:
+                    if "retriedInJob" in event["node"]:
+                        is_retried = True
+                        break
+                if is_retried:
+                    continue
 
                 artifacts = []
                 for artifact in actual_job["artifacts"]["edges"]:
