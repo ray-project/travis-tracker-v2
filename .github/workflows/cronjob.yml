@@ -4,8 +4,8 @@ on:
   push:
     branches: [ master ]
   schedule:
-    - cron: "*/30 * * * *"
-    - cron: "*/10 9-17 * * 1-5"
+    - cron: "*/30 * * * SAT-SUN"
+    - cron: "*/10 * * * MON-FRI"
 
 jobs:
   build:
