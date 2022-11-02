@@ -86,13 +86,16 @@ def _yield_test_result(bazel_log_path):
     with open(bazel_log_path) as f:
         for line in f:
             loaded = json.loads(line)
-            if "targetConfigured" in loaded["id"] and "configured" in loaded and "tag" in loaded["configured"]:
+            if "targetConfigured" in loaded["id"]:
                 test_name = loaded["id"]["targetConfigured"]["label"]
-                for tag in loaded["configured"]["tag"]:
-                    if tag == "flaky":
-                        flaky_tests.add(test_name)
-                    if tag.startswith("team:"):
-                        test_owners[test_name] = tag.replace("team:", "")
+                if "configured" in loaded and "tag" in loaded["configured"]:
+                    for tag in loaded["configured"]["tag"]:
+                        if tag == "flaky":
+                            flaky_tests.add(test_name)
+                        if tag.startswith("team:"):
+                            test_owners[test_name] = tag.replace("team:", "")
+                else:
+                    print(f'could not fetch tags for test {test_name}, cannot determine if it is flaky. Raw dump: {json.dumps(loaded)}')
             if (
                 "configuration" in loaded["id"]
                 and "makeVariable" in loaded["configuration"]
