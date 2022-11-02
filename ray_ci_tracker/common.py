@@ -86,7 +86,7 @@ def _yield_test_result(bazel_log_path):
     with open(bazel_log_path) as f:
         for line in f:
             loaded = json.loads(line)
-            if "targetConfigured" in loaded["id"] and "tag" in loaded["configured"]:
+            if "targetConfigured" in loaded["id"] and "configured" in loaded and "tag" in loaded["configured"]:
                 test_name = loaded["id"]["targetConfigured"]["label"]
                 for tag in loaded["configured"]["tag"]:
                     if tag == "flaky":
