@@ -11,7 +11,7 @@ from fetch_and_render import get_latest_commit
 ARCH_VERSIONS = ["-cpu", "-gpu", ""]
 IMAGES_TO_CHECK = ["ray", "ray-ml"]
 MAX_TIME_FOR_DOCKER_BUILD = timedelta(hours=3)
-PYTHON_VERSIONS = ["-py36", "-py37", "-py38", ""]
+PYTHON_VERSIONS = ["-py37", "-py38", "-py39", "-py310", ""]
 
 
 def get_most_recent_layer(tag_resp: Dict[str, Any]) -> datetime:
