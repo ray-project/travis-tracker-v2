@@ -44,7 +44,7 @@ async def download(ctx, cache_dir):
     cache_path.mkdir(exist_ok=True)
 
     print("🐙 Fetching Commits from Github")
-    await GithubDataSource.fetch_commits(cache_path, ctx.obj["cached_github"])
+    commits = await GithubDataSource.fetch_commits(cache_path, ctx.obj["cached_github"])
 
     print("💻 Downloading Files from S3")
     await S3DataSource.fetch_all(
