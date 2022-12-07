@@ -75,7 +75,6 @@ async def etl_process(ctx, cache_dir, db_path):
     print("[1/n] Writing commits")
     commits = await GithubDataSource.fetch_commits(cache_path, ctx.obj["cached_github"])
     db.write_commits(commits)
-    del commits
 
     print("[1/n] Writing S3 data")
     build_events = await S3DataSource.fetch_all(
