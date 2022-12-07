@@ -148,7 +148,7 @@ class BuildkiteSource:
                 for commit, resp_json in zip(commits, buildkite_jsons)
             ]
         )
-        print("Downloading Buildkite Artifacts")
+        print("Downloading Buildkite Artifacts (CI)")
 
         def contains_bad_commit(status: BuildkiteStatus):
             return status.commit in {

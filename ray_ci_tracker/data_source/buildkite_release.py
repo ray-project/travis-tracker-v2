@@ -102,7 +102,7 @@ class BuildkiteReleaseSource:
                 for commit, resp_json in zip(commits, buildkite_jsons)
             ]
         )
-        print("Downloading Buildkite Artifacts")
+        print("Downloading Buildkite Artifacts (Release)")
 
         artifact_data = await tqdm_asyncio.gather(
             *[
