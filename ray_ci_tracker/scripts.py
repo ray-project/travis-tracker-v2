@@ -35,52 +35,31 @@ def cli(
     ctx.obj["cached_gha"] = cached_gha
 
 
-async def _downloader(
-    ctx,
-    cache_dir: str,
-):
-    cache_path = Path(cache_dir)
-    cache_path.mkdir(exist_ok=True)
-
-    print("🐙 Fetching Commits from Github")
-    commits = await GithubDataSource.fetch_commits(cache_path, ctx.obj["cached_github"])
-
-    print("💻 Downloading Files from S3")
-    build_events = await S3DataSource.fetch_all(
-        cache_path, ctx.obj["cached_s3"], commits
-    )
-
-    print("💻 Downloading Files from Buildkite")
-    (
-        buildkite_parsed,
-        macos_bazel_events,
-        pr_build_time,
-    ) = await BuildkiteSource.fetch_all(
-        cache_path, ctx.obj["cached_buildkite"], commits
-    )
-
-    print("💻 Downloading Files from Buildkite Release Tests")
-    buildkite_release_result = await BuildkiteReleaseSource.fetch_all(
-        cache_path, ctx.obj["cached_buildkite_release"], commits
-    )
-    buildkite_release_result = list(
-        filter(lambda r: r is not None, buildkite_release_result)
-    )
-
-    return {
-        "commits": commits,
-        "bazel_events": macos_bazel_events + build_events + buildkite_release_result,
-        "buildkite_status": buildkite_parsed,
-        "pr_build_time": pr_build_time,
-    }
-
-
 @cli.command("download")
 @click.argument("cache-dir")
 @click.pass_context
 @run_as_sync
 async def download(ctx, cache_dir):
-    await _downloader(ctx, cache_dir)
+    cache_path = Path(cache_dir)
+    cache_path.mkdir(exist_ok=True)
+
+    print("🐙 Fetching Commits from Github")
+    await GithubDataSource.fetch_commits(cache_path, ctx.obj["cached_github"])
+
+    print("💻 Downloading Files from S3")
+    await S3DataSource.fetch_all(
+        cache_path, ctx.obj["cached_s3"], commits
+    )
+
+    print("💻 Downloading Files from Buildkite")
+    await BuildkiteSource.fetch_all(
+        cache_path, ctx.obj["cached_buildkite"], commits
+    )
+
+    print("💻 Downloading Files from Buildkite Release Tests")
+    await BuildkiteReleaseSource.fetch_all(
+        cache_path, ctx.obj["cached_buildkite_release"], commits
+    )
 
 
 @cli.command("etl")
@@ -89,23 +68,47 @@ async def download(ctx, cache_dir):
 @click.pass_context
 @run_as_sync
 async def etl_process(ctx, cache_dir, db_path):
-    loaded = await _downloader(ctx, cache_dir)
-
     print("✍️ Writing Data")
     db = ResultsDBWriter(db_path, wipe=True)
+    cache_path = Path(cache_dir)
 
     print("[1/n] Writing commits")
-    db.write_commits(loaded["commits"])
-    print("[2/n] Writing build results")
-    db.write_build_results(loaded["bazel_events"])
-    print("[3/n] Writing buildkite")
-    db.write_buildkite_data(loaded["buildkite_status"])
-    db.write_buildkite_pr_time(loaded["pr_build_time"])
-    # print("[4/n] Writing github action")
-    # db.write_gha_data(loaded["gha_status"])
-    print("[5/n] fixing data with backfill")
-    db.backfill_test_owners()
+    commits = await GithubDataSource.fetch_commits(cache_path, ctx.obj["cached_github"])
+    db.write_commits(commits)
+    del commits
 
+    print("[1/n] Writing S3 data")
+    build_events = await S3DataSource.fetch_all(
+        cache_path, ctx.obj["cached_s3"], commits
+    )
+    db.write_build_results(build_events)
+    del build_events
+
+    print("[1/n] Writing Buildkite data")
+    (
+        buildkite_parsed,
+        macos_bazel_events,
+        pr_build_time,
+    ) = await BuildkiteSource.fetch_all(
+        cache_path, ctx.obj["cached_buildkite"], commits
+    )
+    db.write_buildkite_data(buildkite_parsed)
+    db.write_build_results(macos_bazel_events)
+    db.write_buildkite_pr_time(pr_build_time)
+    del buildkite_parsed
+    del macos_bazel_events
+    del pr_build_time
+    
+    print("[1/n] Writing Release Test data")
+    buildkite_release_result = await BuildkiteReleaseSource.fetch_all(
+        cache_path, ctx.obj["cached_buildkite_release"], commits
+    )
+    buildkite_release_result = list(
+        filter(lambda r: r is not None, buildkite_release_result)
+    )
+    db.write_build_results(buildkite_release_result)
+    del buildkite_release_result
+    
 
 @cli.command("analysis")
 @click.argument("db_path")
