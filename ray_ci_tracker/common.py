@@ -11,6 +11,7 @@ from typing import List, Optional, Tuple
 import aiofiles
 import click
 import httpx
+import logging
 import ujson as json
 from dotenv import load_dotenv
 from tqdm.asyncio import tqdm_asyncio
@@ -53,6 +54,7 @@ async def get_or_fetch(
     cache_path: Path, *, use_cached: bool, result_cls, many: bool, async_func
 ):
     if not use_cached or not cache_path.exists():
+        logging.debug(f"Fetching w/o cache for: {cache_path}")
         result = await async_func()
         if result is None:
             return
@@ -67,6 +69,7 @@ async def get_or_fetch(
             await f.write(content)
         return result
     else:
+        logging.debug(f"Getting from cache: {cache_path}")
         async with aiofiles.open(cache_path) as f:
             content = await f.read()
             if result_cls and many:
@@ -86,7 +89,11 @@ def _yield_test_result(bazel_log_path):
     with open(bazel_log_path) as f:
         for line in f:
             loaded = json.loads(line)
-            if "targetConfigured" in loaded["id"] and "configured" in loaded and "tag" in loaded["configured"]:
+            if (
+                "targetConfigured" in loaded["id"]
+                and "configured" in loaded
+                and "tag" in loaded["configured"]
+            ):
                 test_name = loaded["id"]["targetConfigured"]["label"]
                 for tag in loaded["configured"]["tag"]:
                     if tag == "flaky":

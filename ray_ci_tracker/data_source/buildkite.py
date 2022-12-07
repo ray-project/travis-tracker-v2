@@ -3,7 +3,7 @@ import functools
 import os
 from itertools import chain
 from pathlib import Path
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 import aiofiles
 import httpx
@@ -115,74 +115,99 @@ query PRTimeQuery {
 class BuildkiteSource:
     @staticmethod
     async def fetch_all(cache_path: Path, cached_buildkite, commits):
-        print("Downloading Buildkite Status (Jobs)")
+        async def try_get_or_fetch(func: Callable):
+            try:
+                return await func()
+            except Exception as e:
+                print(f"Failed to run {getattr(func, '__name__', 'Unknown')}:")
+                print(str(e))
+                return []
+
         concurrency_limiter = asyncio.Semaphore(20)
-        buildkite_jsons = await tqdm_asyncio.gather(
-            *[
-                get_or_fetch(
-                    cache_path / f"bk_jobs/{commit.sha}/http_resp.json",
-                    use_cached=cached_buildkite,
-                    result_cls=None,
-                    many=False,
-                    async_func=functools.partial(
-                        BuildkiteSource.get_buildkite_job_status,
-                        commit_sha=commit.sha,
-                        concurrency_limiter=concurrency_limiter,
-                    ),
-                )
-                for commit in commits
-            ]
-        )
-        buildkite_parsed: List[BuildkiteStatus] = await asyncio.gather(
-            *[
-                get_or_fetch(
-                    cache_path / f"bk_jobs/{commit.sha}/parsed.json",
-                    use_cached=cached_buildkite,
-                    result_cls=BuildkiteStatus,
-                    many=True,
-                    async_func=functools.partial(
-                        BuildkiteSource.parse_buildkite_build_json,
-                        resp_json,
-                    ),
-                )
-                for commit, resp_json in zip(commits, buildkite_jsons)
-            ]
-        )
-        print("Downloading Buildkite Artifacts")
 
-        def contains_bad_commit(status: BuildkiteStatus):
-            return status.commit in {
-                "5985c1902dc24236e15757f42d899b0c0bc5b5d4",
-                "893f57591df7cb7b1fb4fed9978604964123eead",
-            }
+        async def get_buildkite_status():
+            print("Downloading Buildkite Status (Jobs)")
+            buildkite_jsons = await tqdm_asyncio.gather(
+                *[
+                    get_or_fetch(
+                        cache_path / f"bk_jobs/{commit.sha}/http_resp.json",
+                        use_cached=cached_buildkite,
+                        result_cls=None,
+                        many=False,
+                        async_func=functools.partial(
+                            BuildkiteSource.get_buildkite_job_status,
+                            commit_sha=commit.sha,
+                            concurrency_limiter=concurrency_limiter,
+                        ),
+                    )
+                    for commit in commits
+                ]
+            )
 
-        macos_bazel_events = await tqdm_asyncio.gather(
-            *[
-                get_or_fetch(
-                    cache_path
-                    / f"bazel_cached/{status.commit}/mac_result_{status.job_id}.json",
-                    use_cached=cached_buildkite,
-                    result_cls=BuildResult,
-                    many=False,
-                    async_func=functools.partial(
-                        BuildkiteSource.get_buildkite_artifact,
-                        dir_prefix=cache_path,
-                        artifacts=status.artifacts,
-                        concurrency_limiter=asyncio.Semaphore(50),
-                    ),
-                )
-                for status in chain.from_iterable(buildkite_parsed)
-                if len(status.artifacts) > 0 and not contains_bad_commit(status)
-            ]
-        )
-        print("Fetching Buildkite PR Time")
-        pr_build_times = await get_or_fetch(
-            cache_path / f"bk_pr_time/result.json",
-            use_cached=cached_buildkite,
-            result_cls=BuildkitePRBuildTime,
-            many=True,
-            async_func=BuildkiteSource.get_buildkite_pr_buildtime,
-        )
+            buildkite_parsed: List[BuildkiteStatus] = await asyncio.gather(
+                *[
+                    get_or_fetch(
+                        cache_path / f"bk_jobs/{commit.sha}/parsed.json",
+                        use_cached=cached_buildkite,
+                        result_cls=BuildkiteStatus,
+                        many=True,
+                        async_func=functools.partial(
+                            BuildkiteSource.parse_buildkite_build_json,
+                            resp_json,
+                        ),
+                    )
+                    for commit, resp_json in zip(commits, buildkite_jsons)
+                ]
+            )
+            return buildkite_parsed
+
+        async def get_buildkite_artifacts():
+            print("Downloading Buildkite Artifacts")
+
+            def contains_bad_commit(status: BuildkiteStatus):
+                return status.commit in {
+                    "5985c1902dc24236e15757f42d899b0c0bc5b5d4",
+                    "893f57591df7cb7b1fb4fed9978604964123eead",
+                }
+
+            macos_bazel_events = await tqdm_asyncio.gather(
+                *[
+                    get_or_fetch(
+                        cache_path
+                        / f"bazel_cached/{status.commit}/mac_result_{status.job_id}.json",
+                        use_cached=cached_buildkite,
+                        result_cls=BuildResult,
+                        many=False,
+                        async_func=functools.partial(
+                            BuildkiteSource.get_buildkite_artifact,
+                            dir_prefix=cache_path,
+                            artifacts=status.artifacts,
+                            concurrency_limiter=asyncio.Semaphore(50),
+                        ),
+                    )
+                    for status in chain.from_iterable(buildkite_parsed)
+                    if len(status.artifacts) > 0 and not contains_bad_commit(status)
+                ]
+            )
+
+            return macos_bazel_events
+
+        async def get_buildkite_pr_time():
+            print("Fetching Buildkite PR Time")
+            pr_build_times = await get_or_fetch(
+                cache_path / f"bk_pr_time/result.json",
+                use_cached=cached_buildkite,
+                result_cls=BuildkitePRBuildTime,
+                many=True,
+                async_func=BuildkiteSource.get_buildkite_pr_buildtime,
+            )
+
+            return pr_build_times
+
+        buildkite_parsed = await try_get_or_fetch(get_buildkite_status)
+        macos_bazel_events = await try_get_or_fetch(get_buildkite_artifacts)
+        pr_build_times = await try_get_or_fetch(get_buildkite_pr_time)
+
         return (
             list(chain.from_iterable(buildkite_parsed)),
             macos_bazel_events,
