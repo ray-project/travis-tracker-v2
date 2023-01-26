@@ -104,26 +104,25 @@ class BuildkiteReleaseSource:
         )
         print("Downloading Buildkite Artifacts (Release)")
 
-        artifact_data = []
-        # artifact_data = await tqdm_asyncio.gather(
-        #     *[
-        #         get_or_fetch(
-        #             cache_path
-        #             / f"bk_release_jobs/{status.commit}/release_result_{status.job_id}.json",
-        #             use_cached=cached_buildkite,
-        #             result_cls=BuildResult,
-        #             many=False,
-        #             async_func=functools.partial(
-        #                 BuildkiteReleaseSource.get_buildkite_artifact,
-        #                 dir_prefix=cache_path,
-        #                 artifacts=status.artifacts,
-        #                 concurrency_limiter=asyncio.Semaphore(50),
-        #             ),
-        #         )
-        #         for status in chain.from_iterable(buildkite_parsed)
-        #         if len(status.artifacts) > 0
-        #     ]
-        # )
+        artifact_data = await tqdm_asyncio.gather(
+            *[
+                get_or_fetch(
+                    cache_path
+                    / f"bk_release_jobs/{status.commit}/release_result_{status.job_id}.json",
+                    use_cached=cached_buildkite,
+                    result_cls=BuildResult,
+                    many=False,
+                    async_func=functools.partial(
+                        BuildkiteReleaseSource.get_buildkite_artifact,
+                        dir_prefix=cache_path,
+                        artifacts=status.artifacts,
+                        concurrency_limiter=asyncio.Semaphore(50),
+                    ),
+                )
+                for status in chain.from_iterable(buildkite_parsed)
+                if len(status.artifacts) > 0
+            ]
+        )
 
         return artifact_data
 
