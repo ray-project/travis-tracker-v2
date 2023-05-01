@@ -241,6 +241,7 @@ class BuildkiteReleaseSource:
                         "timeout": "FAILED",
                         "error": "FAILED",
                         "unknown error": "FAILED",
+                        "unknown": "FAILED",
                     }[result_json["status"]],
                     total_duration_s=result_json["runtime"],
                     is_labeled_flaky=False,
