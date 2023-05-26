@@ -63,6 +63,10 @@ class S3DataSource:
             objects, stderr = await ls_proc.communicate()
             if stderr:
                 print(stderr.decode("utf-8"))
+            elif ls_proc.returncode != 0 and not objects.strip():
+                print(f"List object for {s3_path} returned nothing; exit code {ls_proc.returncode}")
+                return []
+
             assert ls_proc.returncode == 0
 
             lines = objects.decode("utf-8").splitlines()
@@ -86,7 +90,6 @@ class S3DataSource:
             cmd = f"aws s3 sync s3://{bucket}/{s3_path} {download_dir}"
             for obj in exclude:
                 cmd += f" --exclude {obj[len(s3_path)+1:]}"
-            print(f"{cmd}")
             proc = await asyncio.subprocess.create_subprocess_shell(
                 cmd,
                 shell=True,
