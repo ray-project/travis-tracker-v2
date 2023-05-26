@@ -81,8 +81,7 @@ class S3DataSource:
                     continue
                 if size > 100000000:
                     print(f"Skipping {object_key} because it's too large: {size}")
-                    continue
-                exclude.append(object_key)
+                    exclude.append(object_key)
 
             cmd = f"aws s3 sync s3://{bucket}/{s3_path} {download_dir}"
             for obj in exclude:

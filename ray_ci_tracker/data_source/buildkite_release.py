@@ -142,8 +142,8 @@ class BuildkiteReleaseSource:
                     headers={"Authorization": f"Bearer {os.environ['BUILDKITE_TOKEN']}"},
                     json={"query": GRAPHQL_QUERY.replace("COMMIT_PLACEHODLER", commit_sha)},
                 )
-        resp.raise_for_status()
-        return resp.json()
+                resp.raise_for_status()
+                return resp.json()
 
     @staticmethod
     async def parse_buildkite_build_json(
