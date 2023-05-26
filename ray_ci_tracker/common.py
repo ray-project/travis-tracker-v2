@@ -86,6 +86,18 @@ def _yield_test_result(bazel_log_path):
     with open(bazel_log_path) as f:
         for line in f:
             loaded = json.loads(line)
+            if "configured" in loaded and "targetKind" in loaded["configured"]:
+                target_kind = loaded["configured"]["targetKind"]
+                if target_kind in {
+                    "filegroup rule",
+                    "py_library rule", "py_binary rule",
+                    "py_runtime_pair rule", "cc_binary rule",
+                }:
+                    continue
+                if not "test" in target_kind:
+                    print(f'non test target {test_name}: {json.dumps(loaded)}')
+                    continue
+
             if "targetConfigured" in loaded["id"]:
                 test_name = loaded["id"]["targetConfigured"]["label"]
                 if "configured" in loaded and "tag" in loaded["configured"]:

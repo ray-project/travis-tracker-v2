@@ -73,7 +73,9 @@ export interface SiteDisplayRoot {
 export interface BuildkiteArtifact {
     url: string;
     bazel_events_path: string;
+    id: string;
     job_id: string;
+    build_id: string;
     sha: string;
 }
 

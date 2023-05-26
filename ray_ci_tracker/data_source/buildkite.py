@@ -116,7 +116,7 @@ class BuildkiteSource:
     @staticmethod
     async def fetch_all(cache_path: Path, cached_buildkite, commits):
         print("Downloading Buildkite Status (Jobs)")
-        concurrency_limiter = asyncio.Semaphore(20)
+        concurrency_limiter = asyncio.Semaphore(5)
         buildkite_jsons = await tqdm_asyncio.gather(
             *[
                 get_or_fetch(
@@ -168,7 +168,7 @@ class BuildkiteSource:
                         BuildkiteSource.get_buildkite_artifact,
                         dir_prefix=cache_path,
                         artifacts=status.artifacts,
-                        concurrency_limiter=asyncio.Semaphore(50),
+                        concurrency_limiter=asyncio.Semaphore(5),
                     ),
                 )
                 for status in chain.from_iterable(buildkite_parsed)
@@ -194,13 +194,14 @@ class BuildkiteSource:
     async def get_buildkite_job_status(
         commit_sha, concurrency_limiter: asyncio.Semaphore
     ):
-        http_client = httpx.AsyncClient(timeout=httpx.Timeout(60))
-        async with concurrency_limiter, http_client:
-            resp = await http_client.post(
-                "https://graphql.buildkite.com/v1",
-                headers={"Authorization": f"Bearer {os.environ['BUILDKITE_TOKEN']}"},
-                json={"query": GRAPHQL_QUERY.replace("COMMIT_PLACEHODLER", commit_sha)},
-            )
+        async with concurrency_limiter:
+            http_client = httpx.AsyncClient(timeout=httpx.Timeout(60))
+            async with http_client:
+                resp = await http_client.post(
+                    "https://graphql.buildkite.com/v1",
+                    headers={"Authorization": f"Bearer {os.environ['BUILDKITE_TOKEN']}"},
+                    json={"query": GRAPHQL_QUERY.replace("COMMIT_PLACEHODLER", commit_sha)},
+                )
         resp.raise_for_status()
         return resp.json()
 
@@ -269,20 +270,21 @@ class BuildkiteSource:
         assert len(artifacts)
 
         bazel_events_dir = None
-        async with concurrency_limiter, httpx.AsyncClient() as client:
-            for artifact in artifacts:
-                path = dir_prefix / artifact.bazel_events_path
+        async with concurrency_limiter:
+            async with httpx.AsyncClient() as client:
+                for artifact in artifacts:
+                    path = dir_prefix / artifact.bazel_events_path
 
-                path.parent.mkdir(exist_ok=True, parents=True)
-                bazel_events_dir = path.parent
-                async with client.stream("GET", artifact.url) as response:
-                    if response.status_code == 404:
-                        print(dir_prefix, artifact, 404)
-                        continue
-                    response.raise_for_status()
-                    async with aiofiles.open(path, "wb") as f:
-                        async for chunk in response.aiter_bytes():
-                            await f.write(chunk)
+                    path.parent.mkdir(exist_ok=True, parents=True)
+                    bazel_events_dir = path.parent
+                    async with client.stream("GET", artifact.url) as response:
+                        if response.status_code == 404:
+                            print(dir_prefix, artifact, 404)
+                            continue
+                        response.raise_for_status()
+                        async with aiofiles.open(path, "wb") as f:
+                            async for chunk in response.aiter_bytes():
+                                await f.write(chunk)
 
         assert bazel_events_dir is not None
         return _process_single_build(bazel_events_dir)

@@ -56,7 +56,7 @@ class GithubDataSource:
 
     @staticmethod
     async def fetch_all(cache_path: Path, cached_gha: bool, commits: List[GHCommit]):
-        concurrency_limiter = asyncio.Semaphore(25)
+        concurrency_limiter = asyncio.Semaphore(5)
         gha_status_raw: List[Optional[GHAJobStat]] = await tqdm_asyncio.gather(
             *[
                 get_or_fetch(
@@ -91,35 +91,36 @@ class GithubDataSource:
             "timed_out": "FAILED",
         }
 
-        async with concurrency_limiter, httpx.AsyncClient() as client:
-            data = (
-                await client.get(
-                    f"https://api.github.com/repos/ray-project/ray/commits/{sha}/check-suites",
-                    headers=GH_HEADERS,
-                )
-            ).json()
-
-            if "check_suites" not in data:
-                return None
-
-            for check in data["check_suites"]:
-                slug = check["app"]["slug"]
-                if slug == "github-actions" and check["status"] == "completed":
-                    data = (
-                        await client.get(check["check_runs_url"], headers=GH_HEADERS)
-                    ).json()
-                    if len(data.get("check_runs", [])) == 0:
-                        return None
-                    run = data["check_runs"][0]
-                    return GHAJobStat(
-                        job_id=run["id"],
-                        os="windows",
-                        commit=sha,
-                        env="github action main job",
-                        state=GITHUB_TO_BAZEL_STATUS_MAP[check["conclusion"]],
-                        url=run["html_url"],
-                        duration_s=_parse_duration(
-                            run.get("started_at"), run.get("completed_at")
-                        ),
+        async with concurrency_limiter:
+            async with httpx.AsyncClient() as client:
+                data = (
+                    await client.get(
+                        f"https://api.github.com/repos/ray-project/ray/commits/{sha}/check-suites",
+                        headers=GH_HEADERS,
                     )
+                ).json()
+
+                if "check_suites" not in data:
+                    return None
+
+                for check in data["check_suites"]:
+                    slug = check["app"]["slug"]
+                    if slug == "github-actions" and check["status"] == "completed":
+                        data = (
+                            await client.get(check["check_runs_url"], headers=GH_HEADERS)
+                        ).json()
+                        if len(data.get("check_runs", [])) == 0:
+                            return None
+                        run = data["check_runs"][0]
+                        return GHAJobStat(
+                            job_id=run["id"],
+                            os="windows",
+                            commit=sha,
+                            env="github action main job",
+                            state=GITHUB_TO_BAZEL_STATUS_MAP[check["conclusion"]],
+                            url=run["html_url"],
+                            duration_s=_parse_duration(
+                                run.get("started_at"), run.get("completed_at")
+                            ),
+                        )
         return None

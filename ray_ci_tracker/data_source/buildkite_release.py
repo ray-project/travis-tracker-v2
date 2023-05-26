@@ -40,6 +40,8 @@ query ReleaseTestQuery {
                   state
                   url
                   build {
+                    uuid
+                    number
                     commit
                   }
                   createdAt
@@ -49,6 +51,7 @@ query ReleaseTestQuery {
                   artifacts(first: 100) {
                     edges {
                       node {
+                        uuid
                         downloadURL
                         path
                       }
@@ -70,7 +73,7 @@ class BuildkiteReleaseSource:
     @staticmethod
     async def fetch_all(cache_path: Path, cached_buildkite, commits):
         print("Downloading Buildkite Status (Jobs)")
-        concurrency_limiter = asyncio.Semaphore(20)
+        concurrency_limiter = asyncio.Semaphore(5)
         buildkite_jsons = await tqdm_asyncio.gather(
             *[
                 get_or_fetch(
@@ -116,7 +119,7 @@ class BuildkiteReleaseSource:
                         BuildkiteReleaseSource.get_buildkite_artifact,
                         dir_prefix=cache_path,
                         artifacts=status.artifacts,
-                        concurrency_limiter=asyncio.Semaphore(50),
+                        concurrency_limiter=asyncio.Semaphore(5),
                     ),
                 )
                 for status in chain.from_iterable(buildkite_parsed)
@@ -131,13 +134,14 @@ class BuildkiteReleaseSource:
     async def get_buildkite_job_status(
         commit_sha, concurrency_limiter: asyncio.Semaphore
     ) -> Dict:
-        http_client = httpx.AsyncClient(timeout=httpx.Timeout(60))
-        async with concurrency_limiter, http_client:
-            resp = await http_client.post(
-                "https://graphql.buildkite.com/v1",
-                headers={"Authorization": f"Bearer {os.environ['BUILDKITE_TOKEN']}"},
-                json={"query": GRAPHQL_QUERY.replace("COMMIT_PLACEHODLER", commit_sha)},
-            )
+        async with concurrency_limiter:
+            http_client = httpx.AsyncClient(timeout=httpx.Timeout(60))
+            async with http_client:
+                resp = await http_client.post(
+                    "https://graphql.buildkite.com/v1",
+                    headers={"Authorization": f"Bearer {os.environ['BUILDKITE_TOKEN']}"},
+                    json={"query": GRAPHQL_QUERY.replace("COMMIT_PLACEHODLER", commit_sha)},
+                )
         resp.raise_for_status()
         return resp.json()
 
@@ -156,6 +160,7 @@ class BuildkiteReleaseSource:
                     continue
                 job_id = actual_job["uuid"]
                 sha = actual_job["build"]["commit"]
+                build_id = str(actual_job["build"]["number"])
 
                 artifacts = []
                 for artifact in actual_job["artifacts"]["edges"]:
@@ -170,7 +175,9 @@ class BuildkiteReleaseSource:
                             BuildkiteArtifact(
                                 url=url,
                                 bazel_events_path=on_disk_path,
+                                id=artifact["node"]["uuid"],
                                 job_id=job_id,
+                                build_id=build_id,
                                 sha=sha,
                             )
                         )
@@ -199,20 +206,33 @@ class BuildkiteReleaseSource:
         assert len(artifacts)
 
         bazel_events_dir = None
-        async with concurrency_limiter, httpx.AsyncClient(timeout=60) as client:
-            for artifact in artifacts:
-                path = dir_prefix / artifact.bazel_events_path
+        async with concurrency_limiter:
+            async with httpx.AsyncClient(timeout=60) as client:
+                for artifact in artifacts:
+                    path = dir_prefix / artifact.bazel_events_path
 
-                path.parent.mkdir(exist_ok=True, parents=True)
-                bazel_events_dir = path.parent
-                async with client.stream("GET", artifact.url) as response:
-                    if response.status_code == 404:
-                        print(dir_prefix, artifact, 404)
-                        continue
-                    response.raise_for_status()
-                    async with aiofiles.open(path, "wb") as f:
-                        async for chunk in response.aiter_bytes():
-                            await f.write(chunk)
+                    path.parent.mkdir(exist_ok=True, parents=True)
+                    bazel_events_dir = path.parent
+
+                    artifact_url = (
+                        "https://api.buildkite.com/v2/organizations/ray-project" +
+                        "/pipelines/release-tests-branch" +
+                        "/builds/" + artifact.build_id +
+                        "/jobs/" + artifact.job_id +
+                        "/artifacts/" + artifact.id + "/download"
+                    )
+
+                    async with client.stream(
+                        "GET", artifact_url, follow_redirects=True,
+                        headers={"Authorization": f"Bearer {os.environ['BUILDKITE_TOKEN']}"},
+                    ) as response:
+                        if response.status_code == 404:
+                            print(dir_prefix, artifact, 404)
+                            continue
+                        response.raise_for_status()
+                        async with aiofiles.open(path, "wb") as f:
+                            async for chunk in response.aiter_bytes():
+                                await f.write(chunk)
 
         assert bazel_events_dir is not None
         if not os.path.exists(os.path.join(bazel_events_dir, "result.json")):
