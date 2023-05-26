@@ -85,7 +85,8 @@ class S3DataSource:
 
             cmd = f"aws s3 sync s3://{bucket}/{s3_path} {download_dir}"
             for obj in exclude:
-                cmd += f" --exclude {obj}"
+                cmd += f" --exclude {obj[len(s3_path)+1:]}"
+            print(f"{cmd}")
             proc = await asyncio.subprocess.create_subprocess_shell(
                 cmd,
                 shell=True,
