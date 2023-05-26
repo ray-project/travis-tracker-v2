@@ -91,7 +91,8 @@ def _yield_test_result(bazel_log_path):
                 if target_kind in {
                     "filegroup rule",
                     "py_library rule", "py_binary rule",
-                    "py_runtime_pair rule", "cc_binary rule",
+                    "py_runtime rule", "py_runtime_pair rule",
+                    "cc_binary rule", "cc_library rule",
                 }:
                     continue
                 if not "test" in target_kind:
