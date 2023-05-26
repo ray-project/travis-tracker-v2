@@ -67,6 +67,7 @@ class S3DataSource:
 
             lines = objects.decode("utf-8").splitlines()
 
+            exclude = []
             for line in lines:
                 # Trim the leading date-time
                 line = line[len("2020-01-01 00:00:00 "):].strip()
@@ -81,26 +82,21 @@ class S3DataSource:
                 if size > 100000000:
                     print(f"Skipping {object_key} because it's too large: {size}")
                     continue
+                exclude.append(object_key)
 
-                rel = object_key[len(s3_path) + 1 :]
-                download_path = Path(download_dir) / rel
-                if download_path.exists():
-                    stat = os.stat(download_path)
-                    if stat.st_size == size:
-                        continue
-
-                os.makedirs(download_path.parent, exist_ok=True)
-                cmd = f"aws s3 cp s3://{bucket}/{object_key} {download_path}"
-                proc = await asyncio.subprocess.create_subprocess_shell(
-                    cmd,
-                    shell=True,
-                    stdout=PIPE,
-                    stderr=PIPE,
-                )
-                _, stderr = await proc.communicate()
-                if stderr:
-                    print(stderr.decode("utf-8"))
-                assert proc.returncode == 0
+            cmd = f"aws s3 sync s3://{bucket}/{s3_path} {download_dir}"
+            for obj in exclude:
+                cmd += f" --exclude {obj}"
+            proc = await asyncio.subprocess.create_subprocess_shell(
+                cmd,
+                shell=True,
+                stdout=PIPE,
+                stderr=PIPE,
+            )
+            _, stderr = await proc.communicate()
+            if stderr:
+                print(stderr.decode("utf-8"))
+            assert proc.returncode == 0
 
         lst = [
             _process_single_build(Path(download_dir) / build)
