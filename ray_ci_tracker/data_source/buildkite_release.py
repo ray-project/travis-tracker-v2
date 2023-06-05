@@ -69,6 +69,12 @@ query ReleaseTestQuery {
 """
 
 
+def _map_status(status: str) -> str:
+    if status in {"finished", "success"}:
+        return "PASSED"
+    return "FAILED"
+
+
 class BuildkiteReleaseSource:
     @staticmethod
     async def fetch_all(cache_path: Path, cached_buildkite, commits):
@@ -252,17 +258,7 @@ class BuildkiteReleaseSource:
             results=[
                 TestResult(
                     test_name="release://" + config_json["name"],
-                    status={
-                        "finished": "PASSED",
-                        "runtime_error": "FAILED",
-                        "infra_error": "FAILED",
-                        "transient_infra_error": "FAILED",
-                        "infra_timeout": "FAILED",
-                        "timeout": "FAILED",
-                        "error": "FAILED",
-                        "unknown error": "FAILED",
-                        "unknown": "FAILED",
-                    }[result_json["status"]],
+                    status=_map_status(result_json["status"]),
                     total_duration_s=result_json["runtime"],
                     is_labeled_flaky=False,
                     owner=config_json["team"],
