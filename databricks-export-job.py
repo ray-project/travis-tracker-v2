@@ -20,5 +20,10 @@ resp = requests.get(
 )
 data = resp.json()
 
-with open("serve.html", "w") as f:
-    f.write(data["views"][0]["content"])
+if "views" not in data:
+    print("No dashboard views found")
+    with open("serve.html", "w") as f:
+        f.write("<html><body><p>No dashboard views found.</p></body></html>")
+else:
+    with open("serve.html", "w") as f:
+        f.write(data["views"][0]["content"])
