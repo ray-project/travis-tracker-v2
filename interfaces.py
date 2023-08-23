@@ -1,6 +1,7 @@
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 
+import pandas as pd
 from py_ts_interfaces import Interface
 from dataclasses_json import DataClassJsonMixin
 
@@ -8,6 +9,14 @@ from dataclasses_json import DataClassJsonMixin
 class Mixin(Interface, DataClassJsonMixin):
     pass
 
+def _parse_duration(started_at, finished_at) -> int:
+    started = pd.to_datetime(started_at)
+    finished = pd.to_datetime(finished_at)
+    if started is None or finished is None:
+        duration_s = 0
+    else:
+        duration_s = (finished - started).total_seconds()
+    return duration_s
 
 @dataclass
 class GHCommit(Mixin):
@@ -78,3 +87,17 @@ class SiteFailedTest(Mixin):
 class SiteDisplayRoot(Mixin):
     failed_tests: List[SiteFailedTest]
     stats: List[SiteStatItem]
+
+@dataclass
+class BuildkitePRBuildTime(Mixin):
+    commit: str
+    created_by: str
+    state: str
+    url: str
+    created_at: str
+    started_at: Optional[str]
+    finished_at: Optional[str]
+    pull_id: str
+
+    def get_duration_s(self) -> int:
+        return _parse_duration(self.started_at, self.finished_at)

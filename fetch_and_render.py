@@ -15,6 +15,7 @@ from datetime import datetime
 from dataclasses_json.api import dataclass_json
 
 import requests
+import dataclasses
 from dotenv import load_dotenv
 from tqdm import tqdm
 import numpy as np
@@ -25,6 +26,43 @@ from interfaces import *
 load_dotenv()
 
 GH_HEADERS = {"Authorization": f"token {os.environ['GITHUB_TOKEN']}"}
+
+PR_TIME_QUERY = """
+query PRTimeQuery {
+  pipeline(slug: "ray-project/ray-builders-pr") {
+    builds(first: 500) {
+      edges {
+        node {
+          commit
+          createdAt
+          createdBy {
+            ... on User {
+              userName: name
+            }
+            ... on UnregisteredUser {
+              unregisteredUserName: name
+            }
+          }
+          canceledAt
+          canceledBy {
+            ... on User {
+              userName: name
+            }
+          }
+          finishedAt
+          message
+          pullRequest {
+            id
+          }
+          startedAt
+          state
+          url
+        }
+      }
+    }
+  }
+}
+"""
 
 
 def _parse_duration(started_at, finished_at) -> int:
@@ -202,6 +240,41 @@ class BuildkiteStatus:
     def get_duration_s(self) -> int:
         return _parse_duration(self.startedAt, self.finished_at)
 
+
+def get_buildkite_pr_buildtime() -> List[BuildkitePRBuildTime]:
+    BUILDKITE_TOKEN = os.environ["BUILDKITE_TOKEN"]
+    tries = 5
+    for attempt in range(tries):
+        resp = requests.post(
+            "https://graphql.buildkite.com/v1",
+            headers={"Authorization": f"Bearer {BUILDKITE_TOKEN}"},
+            json={"query": PR_TIME_QUERY}
+        )
+        try:
+            assert resp.status_code == 200, resp.text
+        except AssertionError as e:
+            if attempt < tries - 1:
+                continue
+            else:
+                raise
+        builds = resp.json()["data"]["pipeline"]["builds"]["edges"]
+        return [
+            BuildkitePRBuildTime(
+                commit=build["node"]["commit"],
+                created_by=list(
+                    build["node"].get("createdBy", {"_": "unknown"}).values()
+                )[0],
+                state=build["node"]["state"],
+                url=build["node"]["url"],
+                created_at=build["node"].get("createdAt"),
+                started_at=build["node"].get("startedAt"),
+                finished_at=build["node"].get("finishedAt"),
+                pull_id=build["node"].get("pullRequest", {"id": None}).get("id"),
+            )
+            for build in builds
+            if build["node"] is not None
+            and build["node"].get("pullRequest") is not None
+        ]
 
 def get_buildkite_status() -> Tuple[List, List[BuildkiteStatus]]:
     builds = []
@@ -437,6 +510,19 @@ class ResultsDB:
             message TEXT,
             url TEXT,
             avatar_url TEXT
+        );
+
+        DROP TABLE IF EXISTS pr_time;
+        CREATE TABLE pr_time (
+            sha TEXT,
+            created_by TEXT,
+            state TEXT,
+            url TEXT,
+            created_at TEXT,
+            started_at TEXT,
+            finished_at TEXT,
+            pull_id TEXT,
+            duration_min REAL
         )
         """
         )
@@ -455,6 +541,21 @@ class ResultsDB:
                 )
                 for i, commit in enumerate(commits)
             ],
+        )
+        self.table.commit()
+
+    def write_buildkite_pr_time(self, pr_time_data: List[BuildkitePRBuildTime]):
+        records_to_insert = []
+        for build in pr_time_data:
+            records_to_insert.append(
+                (
+                    *dataclasses.astuple(build),
+                    build.get_duration_s() / 60,
+                )
+            )
+        self.table.executemany(
+            f"INSERT INTO pr_time VALUES ({','.join(['?']*9)})",
+            records_to_insert,
         )
         self.table.commit()
 
@@ -770,6 +871,9 @@ def main():
     travis_data = [get_travis_status(commit.sha) for commit in tqdm(commits)]
     print("Downloading Buildkite Status")
     raw_builds_result, buildkite_status = get_buildkite_status()
+    print("Downloading Buildkite PR Status")
+    pr_data = get_buildkite_pr_buildtime()
+
     with open("cached_buildkite.json", "w") as f:
         json.dump(raw_builds_result, f)
 
@@ -778,6 +882,7 @@ def main():
     db.write_commits(commits)
     db.write_build_results(prefixes)
     db.write_travis_data(travis_data)
+    db.write_buildkite_pr_time(pr_data)
     # TODO(simon): Cache this?
     db.write_buildkite_data(buildkite_status)
 
