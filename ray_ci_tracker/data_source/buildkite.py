@@ -76,7 +76,7 @@ query AllPipelinesQuery {
 
 PR_TIME_QUERY = """
 query PRTimeQuery {
-  pipeline(slug: "ray-project/ray-builders-pr") {
+  pipeline(slug: "ray-project/oss-ci-build-pr") {
     builds(first: 500) {
       edges {
         node {
