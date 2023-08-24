@@ -89,7 +89,7 @@ def _yield_test_result(bazel_log_path):
             if "configured" in loaded and "targetKind" in loaded["configured"]:
                 target_kind = loaded["configured"]["targetKind"]
                 if target_kind in {
-                    "filegroup rule",
+                    "filegroup rule", "genrule rule",
                     "py_library rule", "py_binary rule",
                     "py_runtime rule", "py_runtime_pair rule",
                     "cc_binary rule", "cc_library rule",
