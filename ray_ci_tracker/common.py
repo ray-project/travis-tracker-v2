@@ -96,7 +96,7 @@ def _yield_test_result(bazel_log_path):
                 }:
                     continue
                 if not "test" in target_kind:
-                    print(f'non test target {test_name}: {json.dumps(loaded)}')
+                    print(f'non test target {target_kind}: {json.dumps(loaded)}')
                     continue
 
             if "targetConfigured" in loaded["id"]:
