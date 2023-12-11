@@ -25,7 +25,7 @@ const DetailModal: React.FC<Prop> = ({ testName, owner, links, visible, onClose,
     links = links.filter(l => l.status == "FAILED");
   }
 
-  let markdownBody = links.map(link => `- ${link.sha} ${link.status} [${link.build_env || "link"}](${link.job_url})`).join("\n");
+  let markdownBody = links.slice(0, 10).map(link => `- ${link.sha} ${link.status} [${link.build_env || "link"}](${link.job_url})`).join("\n");
   markdownBody += "\n\n....\nGenerated from flaky test tracker. Please do not edit the signature in this section.\nDataCaseName-" + testName + "-END\n...."
   let githubNewIssueUrl = "https://github.com/ray-project/ray/issues/new?labels=flaky-tracker&title=";
   githubNewIssueUrl += encodeURIComponent("[CI] `" + testName + "` is failing/flaky on master.");
