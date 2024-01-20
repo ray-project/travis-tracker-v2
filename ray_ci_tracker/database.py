@@ -4,8 +4,10 @@ from itertools import chain
 from sqlite3 import connect
 from typing import List, Optional
 
+import boto3
 import numpy as np
 import ujson as json
+from botocore.exceptions import ClientError
 
 from ray_ci_tracker.interfaces import (
     BuildkitePRBuildTime,
@@ -20,8 +22,13 @@ from ray_ci_tracker.interfaces import (
 
 
 class ResultsDBWriter:
+
+    test_state = {}
+
     def __init__(self, location=":memory:", wipe=True) -> None:
         self.table = connect(location)
+        if ResultsDBWriter.test_state == None:
+            ResultsDBReader.test_state = {}
         self.table.executescript(
             """
         PRAGMA synchronous=OFF;
@@ -78,6 +85,28 @@ class ResultsDBWriter:
         """
         )
 
+    @classmethod
+    def get_test_state(cls, test_name):
+        if test_name in cls.test_state:
+            return cls.test_state[test_name]
+        try:
+            data = (
+                boto3.client("s3")
+                .get_object(
+                    Bucket="ray-ci-results",
+                    Key=f"ray_tests/{test_name.replace('/', '_')}.json",
+                )
+                .get("Body")
+                .read()
+                .decode("utf-8")
+            )
+            cls.test_state[test_name] = json.loads(data).get("state", "passing")
+        except ClientError as e:
+            print(f"Failed to get test state for {test_name}: {e}")
+            cls.test_state[test_name] = "passing"
+
+        return cls.test_state[test_name]
+
     def write_commits(self, commits: List[GHCommit]):
         self.table.executemany(
             "INSERT INTO commits VALUES (?,?,?,?,?,?)",
@@ -99,9 +128,10 @@ class ResultsDBWriter:
         records_to_insert = []
         for build_result in results:
             for test in build_result.results:
+                name = f"{build_result.os}:{test.test_name}"
                 records_to_insert.append(
                     (
-                        f"{build_result.os}:{test.test_name}",
+                        name,
                         test.status,
                         build_result.build_env,
                         build_result.os,
@@ -109,7 +139,7 @@ class ResultsDBWriter:
                         build_result.job_id,
                         build_result.sha,
                         test.total_duration_s,
-                        test.is_labeled_flaky,
+                        test.is_labeled_flaky or ResultsDBWriter.get_test_state(name) == 'flaky',
                         test.owner,
                         test.is_labeled_staging,
                     )
@@ -468,13 +498,13 @@ class ResultsDBReader:
                 desired_value=100,
                 unit="%",
             ),
-            # SiteStatItem(
-            #     key="Master Green (without window + flaky tests)",
-            #     value=self.table.execute(master_green_without_flaky_query).fetchone()[0]
-            #     * 100,
-            #     desired_value=100,
-            #     unit="%",
-            # ),
+            SiteStatItem(
+                key="Master Green (without window + flaky tests)",
+                value=self.table.execute(master_green_without_flaky_query).fetchone()[0]
+                * 100,
+                desired_value=100,
+                unit="%",
+            ),
             SiteStatItem(
                 key="P50 Buildkite PR Build Time (last 500 builds)",
                 value=self.table.execute(pr_build_p50_query).fetchone()[0],
@@ -522,13 +552,13 @@ class ResultsDBReader:
                 "key": "Pass Rate (No Windows)",
                 **{k: f"{int(v*100)}%" for k, v in per_team_pass_rate_no_windows},
             },
-            # {
-            #     "key": "Pass Rate (No Windows, Flaky)",
-            #     **{
-            #         k: f"{int(v*100)}%"
-            #         for k, v in per_team_pass_rate_no_windows_no_flaky
-            #     },
-            # },
+            {
+                "key": "Pass Rate (No Windows, Flaky)",
+                **{
+                    k: f"{int(v*100)}%"
+                    for k, v in per_team_pass_rate_no_windows_no_flaky
+                },
+            },
         ]
         columns = [{"title": "", "dataIndex": "key", "key": "key"}] + [
             {"title": name, "dataIndex": name, "key": name} for name in owners
