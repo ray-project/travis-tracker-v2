@@ -5,9 +5,9 @@ import ujson as json
 
 from ray_ci_tracker.common import run_as_sync
 from ray_ci_tracker.data_source.buildkite import BuildkiteSource
-from ray_ci_tracker.data_source.buildkite_release import BuildkiteReleaseSource
 from ray_ci_tracker.data_source.github import GithubDataSource
 from ray_ci_tracker.data_source.s3 import S3DataSource
+from ray_ci_tracker.data_source.release_test import fetch_all_release_test_results
 from ray_ci_tracker.database import ResultsDBReader, ResultsDBWriter
 from ray_ci_tracker.interfaces import SiteDisplayRoot, SiteFailedTest
 
@@ -56,11 +56,6 @@ async def download(ctx, cache_dir):
         cache_path, ctx.obj["cached_buildkite"], commits
     )
 
-    print("💻 Downloading Files from Buildkite Release Tests")
-    await BuildkiteReleaseSource.fetch_all(
-        cache_path, ctx.obj["cached_buildkite_release"], commits
-    )
-
 
 @cli.command("etl")
 @click.argument("cache_dir")
@@ -75,6 +70,11 @@ async def etl_process(ctx, cache_dir, db_path):
     print("[1/n] Writing commits")
     commits = await GithubDataSource.fetch_commits(cache_path, ctx.obj["cached_github"])
     db.write_commits(commits)
+
+    print("[1/n] Writing Release Test data")
+    build_release_result = fetch_all_release_test_results(commits)
+    db.write_build_results(build_release_result)
+    del build_release_result
 
     print("[1/n] Writing S3 data")
     build_events = await S3DataSource.fetch_all(
@@ -97,16 +97,6 @@ async def etl_process(ctx, cache_dir, db_path):
     del buildkite_parsed
     del macos_bazel_events
     del pr_build_time
-    
-    print("[1/n] Writing Release Test data")
-    buildkite_release_result = await BuildkiteReleaseSource.fetch_all(
-        cache_path, ctx.obj["cached_buildkite_release"], commits
-    )
-    buildkite_release_result = list(
-        filter(lambda r: r is not None, buildkite_release_result)
-    )
-    db.write_build_results(buildkite_release_result)
-    del buildkite_release_result
     
 
 @cli.command("analysis")

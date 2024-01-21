@@ -396,6 +396,13 @@ def process_single_build(dir_name) -> BuildResult:
     with open(dir_name / "metadata.json") as f:
         metadata = json.load(f)
 
+    os_name = metadata["build_env"]["TRAVIS_OS_NAME"]
+    # we have an inconsistency in the naming of osx platform across multiple data 
+    # storage; in order to unify them, we teach the UI to merge results coming in 
+    # both from osx and darwin
+    if os_name == 'osx':
+        os_name = 'darwin'
+
     return BuildResult(
         sha=metadata["build_env"]["TRAVIS_COMMIT"],
         job_url=metadata["build_env"]["TRAVIS_JOB_WEB_URL"],
