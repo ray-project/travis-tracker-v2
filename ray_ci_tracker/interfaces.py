@@ -101,7 +101,7 @@ class SiteWeeklyGreenMetric(Mixin):
 class SiteDisplayRoot(Mixin):
     failed_tests: List[SiteFailedTest]
     stats: List[SiteStatItem]
-    get_weekly_green_metric: List[SiteWeeklyGreenMetric]
+    weekly_green_metric: List[SiteWeeklyGreenMetric]
     test_owners: List[str]
     table_stat: str
 

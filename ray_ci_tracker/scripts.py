@@ -13,6 +13,11 @@ from ray_ci_tracker.database import ResultsDBReader, ResultsDBWriter
 from ray_ci_tracker.interfaces import SiteDisplayRoot, SiteFailedTest, SiteWeeklyGreenMetric
 
 
+AWS_ROLE = "arn:aws:iam::029272617770:role/go-flaky-dashboard"
+AWS_BUCKET = "ray-ci-results"
+AWS_WEEKLY_GREEN_METRIC_PREFIX = "ray_weekly_green_metric/blocker_"
+
+
 @click.group()
 @click.option("--cached-github/--no-cached-github", default=True)
 @click.option("--cached-s3/--no-cached-s3", default=True)
@@ -111,11 +116,21 @@ async def etl_process(ctx, cache_dir, db_path):
 
 
 def get_weekly_green_metric():
-    s3_client = boto3.client("s3")
+    role = boto3.client('sts').assume_role(
+        RoleArn=AWS_ROLE,
+        RoleSessionName="SessionOne",
+    )
+    credentials = role['Credentials']
+    session = boto3.Session(
+        aws_access_key_id=credentials['AccessKeyId'],
+        aws_secret_access_key=credentials['SecretAccessKey'],
+        aws_session_token=credentials['SessionToken']
+    )
+    s3_client = session.client("s3")
     files = sorted(
         s3_client.list_objects_v2(
-            Bucket="ray-ci-results",
-            Prefix=f"ray_weekly_green_metric/blocker_",
+            Bucket=AWS_BUCKET,
+            Prefix=AWS_WEEKLY_GREEN_METRIC_PREFIX,
         ).get("Contents", []),
         key=lambda file: int(file["LastModified"].strftime("%s")),
         reverse=True,
@@ -125,7 +140,7 @@ def get_weekly_green_metric():
     for file in files:
         blockers = json.loads(
             s3_client.get_object(
-                Bucket="ray-ci-results",
+                Bucket=AWS_BUCKET,
                 Key=file["Key"],
             )
             .get("Body")
@@ -162,7 +177,7 @@ def perform_analysis(db_path, frontend_json_path):
     root_display = SiteDisplayRoot(
         failed_tests=data_to_display,
         stats=db.get_stats(),
-        get_weekly_green_metric=get_weekly_green_metric(),
+        weekly_green_metric=get_weekly_green_metric(),
         test_owners=db.get_all_owners(),
         table_stat=db.get_table_stat(),
     )
