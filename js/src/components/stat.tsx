@@ -15,7 +15,7 @@ const StatsPane: React.FC<Prop> = ({ stats }) => (
             title={s.key}
             value={s.value.toFixed(0)}
             valueStyle={{
-              color: s.value === s.desired_value ? "green" : "red",
+              color: s.value >= s.desired_value ? "green" : "red",
               textAlign: "right",
             }}
             suffix={s.unit}
