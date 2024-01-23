@@ -92,9 +92,16 @@ class SiteFailedTest(Mixin):
 
 
 @dataclass
+class SiteWeeklyGreenMetric(Mixin):
+    date: str
+    num_of_blockers: int
+
+
+@dataclass
 class SiteDisplayRoot(Mixin):
     failed_tests: List[SiteFailedTest]
     stats: List[SiteStatItem]
+    get_weekly_green_metric: List[SiteWeeklyGreenMetric]
     test_owners: List[str]
     table_stat: str
 
