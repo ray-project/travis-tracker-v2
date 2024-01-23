@@ -452,64 +452,21 @@ class ResultsDBReader:
             )
         """
 
-        master_green_without_windows_query = """
-            -- Master Green Rate (past 100 commits)
-            SELECT SUM(green)*1.0/COUNT(green)
-            FROM (
-                SELECT SUM(status == 'FAILED') == 0 as green
-                FROM test_result, commits
-                WHERE test_result.sha == commits.sha
-                  AND test_result.os NOT LIKE 'windows'
-                  AND test_result.is_staging_test == FALSE
-                GROUP BY test_result.sha
-                ORDER BY commits.idx
-            )
-        """
-
-        pr_build_p50_query = """
-            WITH finished_job_time AS (
-                SELECT duration_min
-                FROM pr_time
-                WHERE duration_min > 0
-                AND state NOT LIKE "%CANCELED%"
-                ORDER BY duration_min
-            )
-            SELECT duration_min
-            FROM finished_job_time
-            ORDER BY duration_min
-            LIMIT 1
-            OFFSET (SELECT COUNT(*)
-                    FROM finished_job_time) / 2
-        """
-
         return [
             SiteStatItem(
                 key="Master Green (past 100 commits)",
                 value=self.table.execute(master_green_query).fetchone()[0] * 100,
-                desired_value=100,
-                unit="%",
-            ),
-            SiteStatItem(
-                key="Master Green (without windows)",
-                value=self.table.execute(master_green_without_windows_query).fetchone()[
-                    0
-                ]
-                * 100,
-                desired_value=100,
+                # weekly green goal
+                desired_value=20,
                 unit="%",
             ),
             SiteStatItem(
                 key="Master Green (without window + flaky tests)",
                 value=self.table.execute(master_green_without_flaky_query).fetchone()[0]
                 * 100,
-                desired_value=100,
+                # weekly green goal
+                desired_value=20,
                 unit="%",
-            ),
-            SiteStatItem(
-                key="P50 Buildkite PR Build Time (last 500 builds)",
-                value=self.table.execute(pr_build_p50_query).fetchone()[0],
-                desired_value=45,
-                unit="min",
             ),
         ]
 
@@ -532,9 +489,6 @@ class ResultsDBReader:
         per_team_pass_rate_all = self.table.execute(
             query_template.format(condition="")
         ).fetchall()
-        per_team_pass_rate_no_windows = self.table.execute(
-            query_template.format(condition="AND test_result.os NOT LIKE 'windows'")
-        ).fetchall()
         per_team_pass_rate_no_windows_no_flaky = self.table.execute(
             query_template.format(
                 condition="AND test_result.os NOT LIKE 'windows' AND test_result.is_labeled_flaky == 0"
@@ -547,10 +501,6 @@ class ResultsDBReader:
             {
                 "key": "Pass Rate",
                 **{k: f"{int(v*100)}%" for k, v in per_team_pass_rate_all},
-            },
-            {
-                "key": "Pass Rate (No Windows)",
-                **{k: f"{int(v*100)}%" for k, v in per_team_pass_rate_no_windows},
             },
             {
                 "key": "Pass Rate (No Windows, Flaky)",
