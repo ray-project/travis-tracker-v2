@@ -47,7 +47,7 @@ const TestCase: React.FC<Prop> = (props) => {
         >
           <Row>
             <Col>{props.case.name}</Col>
-            {props.case.is_labeled_flaky && <Col span={2}> 🥶</Col>}
+            {props.case.is_labeled_flaky && <Col span={2}>🥶</Col>}
 
             <Col flex="auto"></Col>
 
