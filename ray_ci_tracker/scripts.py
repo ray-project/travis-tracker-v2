@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import boto3
 import click
 import ujson as json
 
@@ -9,7 +10,12 @@ from ray_ci_tracker.data_source.buildkite_release import BuildkiteReleaseSource
 from ray_ci_tracker.data_source.github import GithubDataSource
 from ray_ci_tracker.data_source.s3 import S3DataSource
 from ray_ci_tracker.database import ResultsDBReader, ResultsDBWriter
-from ray_ci_tracker.interfaces import SiteDisplayRoot, SiteFailedTest
+from ray_ci_tracker.interfaces import SiteDisplayRoot, SiteFailedTest, SiteWeeklyGreenMetric
+
+
+AWS_ROLE = "arn:aws:iam::029272617770:role/go-flaky-dashboard"
+AWS_BUCKET = "ray-ci-results"
+AWS_WEEKLY_GREEN_METRIC_PREFIX = "ray_weekly_green_metric/blocker_"
 
 
 @click.group()
@@ -107,6 +113,46 @@ async def etl_process(ctx, cache_dir, db_path):
     )
     db.write_build_results(buildkite_release_result)
     del buildkite_release_result
+
+
+def get_weekly_green_metric():
+    role = boto3.client('sts').assume_role(
+        RoleArn=AWS_ROLE,
+        RoleSessionName="SessionOne",
+    )
+    credentials = role['Credentials']
+    session = boto3.Session(
+        aws_access_key_id=credentials['AccessKeyId'],
+        aws_secret_access_key=credentials['SecretAccessKey'],
+        aws_session_token=credentials['SessionToken']
+    )
+    s3_client = session.client("s3")
+    files = sorted(
+        s3_client.list_objects_v2(
+            Bucket=AWS_BUCKET,
+            Prefix=AWS_WEEKLY_GREEN_METRIC_PREFIX,
+        ).get("Contents", []),
+        key=lambda file: int(file["LastModified"].strftime("%s")),
+        reverse=True,
+    )[:100]
+
+    metrics = []
+    for file in files:
+        blockers = json.loads(
+            s3_client.get_object(
+                Bucket=AWS_BUCKET,
+                Key=file["Key"],
+            )
+            .get("Body")
+            .read()
+            .decode("utf-8")
+        )
+        metrics.append(SiteWeeklyGreenMetric(
+            date=file["LastModified"].strftime("%Y-%m-%d"),
+            num_of_blockers=sum(blockers.values())
+        ))
+
+    return metrics
     
 
 @cli.command("analysis")
@@ -131,6 +177,7 @@ def perform_analysis(db_path, frontend_json_path):
     root_display = SiteDisplayRoot(
         failed_tests=data_to_display,
         stats=db.get_stats(),
+        weekly_green_metric=get_weekly_green_metric(),
         test_owners=db.get_all_owners(),
         table_stat=db.get_table_stat(),
     )

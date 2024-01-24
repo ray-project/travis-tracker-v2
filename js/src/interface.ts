@@ -63,9 +63,15 @@ export interface SiteFailedTest {
     owner: string;
 }
 
+export interface SiteWeeklyGreenMetric {
+    date: string;
+    num_of_blockers: number;
+}
+
 export interface SiteDisplayRoot {
     failed_tests: Array<SiteFailedTest>;
     stats: Array<SiteStatItem>;
+    weekly_green_metric: Array<SiteWeeklyGreenMetric>;
     test_owners: Array<string>;
     table_stat: string;
 }
