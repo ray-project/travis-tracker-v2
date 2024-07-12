@@ -55,7 +55,7 @@ query AllPipelinesQuery {
                       }
                     }
                   }
-                  artifacts(first: 100) {
+                  artifacts(first: 200) {
                     edges {
                       node {
                         downloadURL

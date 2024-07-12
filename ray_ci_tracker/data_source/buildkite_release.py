@@ -48,7 +48,7 @@ query ReleaseTestQuery {
                   runnableAt
                   startedAt
                   finishedAt
-                  artifacts(first: 100) {
+                  artifacts(first: 200) {
                     edges {
                       node {
                         uuid

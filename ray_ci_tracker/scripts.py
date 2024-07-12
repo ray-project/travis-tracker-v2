@@ -134,7 +134,7 @@ def get_weekly_green_metric():
         ).get("Contents", []),
         key=lambda file: int(file["LastModified"].strftime("%s")),
         reverse=True,
-    )[:100]
+    )[:200]
 
     metrics = []
     for file in files:

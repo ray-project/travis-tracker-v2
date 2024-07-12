@@ -39,7 +39,7 @@ def _parse_duration(started_at, finished_at) -> int:
 
 def get_latest_commit() -> List[GHCommit]:
     resp = requests.get(
-        "https://api.github.com/repos/ray-project/ray/commits?per_page=100",
+        "https://api.github.com/repos/ray-project/ray/commits?per_page=200",
         headers=GH_HEADERS,
     )
     assert resp.status_code == 200, "Pinging github API /commits failed"
@@ -207,7 +207,7 @@ def get_buildkite_status() -> Tuple[List, List[BuildkiteStatus]]:
     builds = []
     result = []
     page_token = None
-    for offset in [0, 20, 40, 60, 80, 100]:
+    for offset in [0, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200]:
         if offset == 0:
             builds_chunk, result_chunks, page_token = get_buildkite_status_paginated(
                 f"first: 20"
@@ -242,7 +242,7 @@ def get_buildkite_status_paginated(page_command):
               startedAt
               finishedAt
               number
-              jobs(first: 100) {
+              jobs(first: 200) {
                 edges {
                   node {
                     ... on JobTypeCommand {
@@ -258,7 +258,7 @@ def get_buildkite_status_paginated(page_command):
                       runnableAt
                       startedAt
                       finishedAt
-                      artifacts(first: 100) {
+                      artifacts(first: 200) {
                         edges {
                           node {
                             downloadURL
@@ -292,7 +292,7 @@ def get_buildkite_status_paginated(page_command):
     builds = resp.json()["data"]["pipeline"]["builds"]["edges"]
     results = []
 
-    thread_pool = ThreadPoolExecutor(100)
+    thread_pool = ThreadPoolExecutor(200)
     futures = []
 
     for build in tqdm(builds):
@@ -557,7 +557,7 @@ class ResultsDB:
 
     def list_tests_ordered(self):
         query = f"""
-            SELECT test_name, SUM(100 - commits.idx) as weight
+            SELECT test_name, SUM(200 - commits.idx) as weight
             FROM test_result, commits
             WHERE test_result.sha == commits.sha
             AND status == (?)
@@ -577,7 +577,7 @@ class ResultsDB:
         ).fetchall()
         green_flaky_tests = self.table.execute(
             """
-            SELECT test_name, SUM(100 - commits.idx) as weight
+            SELECT test_name, SUM(200 - commits.idx) as weight
             FROM test_result, commits
             WHERE test_result.sha == commits.sha
               AND status == 'PASSED'
@@ -684,7 +684,7 @@ class ResultsDB:
 
     def get_stats(self):
         master_green_query = """
-            -- Master Green Rate (past 100 commits)
+            -- Master Green Rate (past 200 commits)
             SELECT SUM(green)*1.0/COUNT(green)
             FROM (
                 SELECT SUM(status == 'FAILED') == 0 as green
@@ -723,7 +723,7 @@ class ResultsDB:
 
         return [
             SiteStatItem(
-                key="Master Green (past 100 commits)",
+                key="Master Green (past 200 commits)",
                 value=self.table.execute(master_green_query).fetchone()[0] * 100,
                 desired_value=100,
                 unit="%",
