@@ -83,7 +83,7 @@ class S3DataSource:
                 object_key = fields[1]
                 if object_key.endswith("/"):
                     continue
-                if size > 100000000:
+                if size > 50000000:
                     print(f"Skipping {object_key} because it's too large: {size}")
                     exclude.append(object_key)
 

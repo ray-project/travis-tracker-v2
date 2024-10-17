@@ -21,7 +21,7 @@ class GithubDataSource:
     @staticmethod
     async def _get_latest_commit() -> List[GHCommit]:
         resp = httpx.get(
-            "https://api.github.com/repos/ray-project/ray/commits?per_page=100",
+            "https://api.github.com/repos/ray-project/ray/commits?per_page=50",
             headers=GH_HEADERS,
         )
         assert resp.status_code == 200, "Pinging github API /commits failed"
