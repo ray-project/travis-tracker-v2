@@ -53,18 +53,3 @@ jobs:
       run: |
         python databricks-export-job.py
         aws s3 cp --acl public-read serve.html s3://ray-perf-dashboards/serve/nightly.html
-    - name: Post slack notification
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-      run: |
-        python slack_fail_runner.py
-    - name: Run slow test stats
-      run: |
-        cat sql/slow_tests.sql | sqlite3 results.db
-    - name: Catch Failures
-      if: ${{ failure() }}
-      env:
-        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-      run: |
-        python failure_notifier.py
