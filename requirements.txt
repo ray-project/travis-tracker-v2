@@ -1,7 +1,6 @@
 astroid
 python-dotenv
 boto3
-dataclasses
 tqdm>=4.62.2
 jinja2
 mypy
