@@ -1,3 +1,4 @@
+astroid
 python-dotenv
 boto3
 dataclasses
@@ -6,6 +7,7 @@ jinja2
 mypy
 requests
 typing_extensions
+py-ts-interfaces
 dataclasses-json
 pytz
 pandas
