@@ -2,7 +2,7 @@ name: Periodic Job
 
 on:
   push:
-    branches: [ master ]
+    branches: [ "master", "lonnie-250304-ubunup" ]
   schedule:
     - cron: "*/30 * * * *"
   workflow_dispatch: ~
