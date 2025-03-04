@@ -7,5 +7,5 @@ data:
 	ray-ci etl cache_dir results.db
 	ray-ci analysis results.db js/src/data.json
 
-site: interface data
+site: data
 	cd js; yarn; yarn build
