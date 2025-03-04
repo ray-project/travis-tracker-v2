@@ -1,10 +1,10 @@
-astroid==2.5.8
-python-dotenv==0.14.0
-boto3==1.14.50
+astroid
+python-dotenv
+boto3
 dataclasses
 tqdm>=4.62.2
 jinja2
-mypy==0.902
+mypy
 requests
 typing_extensions
 py-ts-interfaces
