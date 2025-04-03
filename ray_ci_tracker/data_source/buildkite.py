@@ -2,6 +2,7 @@ import asyncio
 import functools
 import os
 from itertools import chain
+import json
 from pathlib import Path
 from typing import List, Optional
 
@@ -175,18 +176,9 @@ class BuildkiteSource:
                 if len(status.artifacts) > 0 and not contains_bad_commit(status)
             ]
         )
-        print("Fetching Buildkite PR Time")
-        pr_build_times = await get_or_fetch(
-            cache_path / f"bk_pr_time/result.json",
-            use_cached=cached_buildkite,
-            result_cls=BuildkitePRBuildTime,
-            many=True,
-            async_func=BuildkiteSource.get_buildkite_pr_buildtime,
-        )
         return (
             list(chain.from_iterable(buildkite_parsed)),
             macos_bazel_events,
-            pr_build_times,
         )
 
     @staticmethod
@@ -209,6 +201,9 @@ class BuildkiteSource:
     async def parse_buildkite_build_json(
         resp_json: dict,
     ) -> List[BuildkiteStatus]:
+        if "data" not in resp_json:
+            raise Exception("invalid data: " + json.dumps(resp_json, indent=2))
+
         builds = resp_json["data"]["pipeline"]["builds"]["edges"]
 
         statuses = []
@@ -288,33 +283,3 @@ class BuildkiteSource:
 
         assert bazel_events_dir is not None
         return _process_single_build(bazel_events_dir)
-
-    @staticmethod
-    @retry
-    async def get_buildkite_pr_buildtime() -> List[BuildkitePRBuildTime]:
-        http_client = httpx.AsyncClient(timeout=httpx.Timeout(60))
-        async with http_client:
-            resp = await http_client.post(
-                "https://graphql.buildkite.com/v1",
-                headers={"Authorization": f"Bearer {os.environ['BUILDKITE_TOKEN']}"},
-                json={"query": PR_TIME_QUERY},
-            )
-        resp.raise_for_status()
-        builds = resp.json()["data"]["pipeline"]["builds"]["edges"]
-        return [
-            BuildkitePRBuildTime(
-                commit=build["node"]["commit"],
-                created_by=list(
-                    build["node"].get("createdBy", {"_": "unknown"}).values()
-                )[0],
-                state=build["node"]["state"],
-                url=build["node"]["url"],
-                created_at=build["node"].get("createdAt"),
-                started_at=build["node"].get("startedAt"),
-                finished_at=build["node"].get("finishedAt"),
-                pull_id=build["node"].get("pullRequest", {"id": None}).get("id"),
-            )
-            for build in builds
-            if build["node"] is not None
-            and build["node"].get("pullRequest") is not None
-        ]

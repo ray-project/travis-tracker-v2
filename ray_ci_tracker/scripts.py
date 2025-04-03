@@ -93,16 +93,13 @@ async def etl_process(ctx, cache_dir, db_path):
     (
         buildkite_parsed,
         macos_bazel_events,
-        pr_build_time,
     ) = await BuildkiteSource.fetch_all(
         cache_path, ctx.obj["cached_buildkite"], commits
     )
     db.write_buildkite_data(buildkite_parsed)
     db.write_build_results(macos_bazel_events)
-    db.write_buildkite_pr_time(pr_build_time)
     del buildkite_parsed
     del macos_bazel_events
-    del pr_build_time
     
     print("[1/n] Writing Release Test data")
     buildkite_release_result = await BuildkiteReleaseSource.fetch_all(
