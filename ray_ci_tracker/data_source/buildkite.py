@@ -13,14 +13,13 @@ from tqdm.asyncio import tqdm_asyncio
 from ray_ci_tracker.common import _process_single_build, get_or_fetch, retry
 from ray_ci_tracker.interfaces import (
     BuildkiteArtifact,
-    BuildkitePRBuildTime,
     BuildkiteStatus,
     BuildResult,
 )
 
 GRAPHQL_QUERY = """
 query AllPipelinesQuery {
-  pipeline(slug: "ray-project/oss-ci-build-branch") {
+  pipeline(slug: "ray-project/postmerge") {
     builds(branch: "master", commit: "COMMIT_PLACEHODLER") {
       count
       edges {
@@ -68,43 +67,6 @@ query AllPipelinesQuery {
               }
             }
           }
-        }
-      }
-    }
-  }
-}
-"""
-
-PR_TIME_QUERY = """
-query PRTimeQuery {
-  pipeline(slug: "ray-project/oss-ci-build-pr") {
-    builds(first: 500) {
-      edges {
-        node {
-          commit
-          createdAt
-          createdBy {
-            ... on User {
-              userName: name
-            }
-            ... on UnregisteredUser {
-              unregisteredUserName: name
-            }
-          }
-          canceledAt
-          canceledBy {
-            ... on User {
-              userName: name
-            }
-          }
-          finishedAt
-          message
-          pullRequest {
-            id
-          }
-          startedAt
-          state
-          url
         }
       }
     }
