@@ -56,10 +56,12 @@ async def download(ctx, cache_dir):
         cache_path, ctx.obj["cached_s3"], commits
     )
 
-    print("💻 Downloading Files from Buildkite Release Tests")
-    await BuildkiteReleaseSource.fetch_all(
-        cache_path, ctx.obj["cached_buildkite_release"], commits
-    )
+    if False:
+        # Not working anymore..
+        print("💻 Downloading Files from Buildkite Release Tests")
+        await BuildkiteReleaseSource.fetch_all(
+            cache_path, ctx.obj["cached_buildkite_release"], commits
+        )
 
 
 @cli.command("etl")
