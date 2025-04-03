@@ -85,15 +85,16 @@ async def etl_process(ctx, cache_dir, db_path):
     db.write_build_results(build_events)
     del build_events
     
-    print("[1/n] Writing Release Test data")
-    buildkite_release_result = await BuildkiteReleaseSource.fetch_all(
-        cache_path, ctx.obj["cached_buildkite_release"], commits
-    )
-    buildkite_release_result = list(
-        filter(lambda r: r is not None, buildkite_release_result)
-    )
-    db.write_build_results(buildkite_release_result)
-    del buildkite_release_result
+    if False:
+        print("[1/n] Writing Release Test data")
+        buildkite_release_result = await BuildkiteReleaseSource.fetch_all(
+            cache_path, ctx.obj["cached_buildkite_release"], commits
+        )
+        buildkite_release_result = list(
+            filter(lambda r: r is not None, buildkite_release_result)
+        )
+        db.write_build_results(buildkite_release_result)
+        del buildkite_release_result
 
 
 def get_weekly_green_metric():
