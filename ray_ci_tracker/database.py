@@ -151,21 +151,6 @@ class ResultsDBWriter:
         )
         self.table.commit()
 
-    def write_buildkite_pr_time(self, pr_time_data: List[BuildkitePRBuildTime]):
-        records_to_insert = []
-        for build in pr_time_data:
-            records_to_insert.append(
-                (
-                    *dataclasses.astuple(build),
-                    build.get_duration_s() / 60,
-                )
-            )
-        self.table.executemany(
-            f"INSERT INTO pr_time VALUES ({','.join(['?']*9)})",
-            records_to_insert,
-        )
-        self.table.commit()
-
     def write_buildkite_data(self, buildkite_data: List[BuildkiteStatus]):
         records_to_insert = []
         for job in buildkite_data:

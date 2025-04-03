@@ -5,7 +5,6 @@ import click
 import ujson as json
 
 from ray_ci_tracker.common import run_as_sync
-from ray_ci_tracker.data_source.buildkite import BuildkiteSource
 from ray_ci_tracker.data_source.buildkite_release import BuildkiteReleaseSource
 from ray_ci_tracker.data_source.github import GithubDataSource
 from ray_ci_tracker.data_source.s3 import S3DataSource
@@ -57,15 +56,12 @@ async def download(ctx, cache_dir):
         cache_path, ctx.obj["cached_s3"], commits
     )
 
-    print("💻 Downloading Files from Buildkite")
-    await BuildkiteSource.fetch_all(
-        cache_path, ctx.obj["cached_buildkite"], commits
-    )
-
-    print("💻 Downloading Files from Buildkite Release Tests")
-    await BuildkiteReleaseSource.fetch_all(
-        cache_path, ctx.obj["cached_buildkite_release"], commits
-    )
+    if False:
+        # Not working anymore..
+        print("💻 Downloading Files from Buildkite Release Tests")
+        await BuildkiteReleaseSource.fetch_all(
+            cache_path, ctx.obj["cached_buildkite_release"], commits
+        )
 
 
 @cli.command("etl")
@@ -88,31 +84,17 @@ async def etl_process(ctx, cache_dir, db_path):
     )
     db.write_build_results(build_events)
     del build_events
-
-    print("[1/n] Writing Buildkite data")
-    (
-        buildkite_parsed,
-        macos_bazel_events,
-        pr_build_time,
-    ) = await BuildkiteSource.fetch_all(
-        cache_path, ctx.obj["cached_buildkite"], commits
-    )
-    db.write_buildkite_data(buildkite_parsed)
-    db.write_build_results(macos_bazel_events)
-    db.write_buildkite_pr_time(pr_build_time)
-    del buildkite_parsed
-    del macos_bazel_events
-    del pr_build_time
     
-    print("[1/n] Writing Release Test data")
-    buildkite_release_result = await BuildkiteReleaseSource.fetch_all(
-        cache_path, ctx.obj["cached_buildkite_release"], commits
-    )
-    buildkite_release_result = list(
-        filter(lambda r: r is not None, buildkite_release_result)
-    )
-    db.write_build_results(buildkite_release_result)
-    del buildkite_release_result
+    if False:
+        print("[1/n] Writing Release Test data")
+        buildkite_release_result = await BuildkiteReleaseSource.fetch_all(
+            cache_path, ctx.obj["cached_buildkite_release"], commits
+        )
+        buildkite_release_result = list(
+            filter(lambda r: r is not None, buildkite_release_result)
+        )
+        db.write_build_results(buildkite_release_result)
+        del buildkite_release_result
 
 
 def get_weekly_green_metric():
