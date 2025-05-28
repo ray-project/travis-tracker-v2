@@ -384,7 +384,7 @@ class ResultsDBReader:
             """
             -- Commit Tooltip
             WITH filtered(sha, num_failed, num_flaky) AS (
-                SELECT sha, SUM(status == 'FAILED'), SUM(status == 'FLAKY') as num_failed
+                SELECT sha, SUM(status == 'FLAKY'), SUM(status == 'FAILED') as num_failed
                 FROM test_result
                 WHERE test_name == (?)
                 GROUP BY sha
