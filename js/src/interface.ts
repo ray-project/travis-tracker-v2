@@ -42,6 +42,7 @@ export interface SiteTravisLink {
 export interface SiteCommitTooltip {
     num_failed: number | null;
     num_flaky: number | null;
+    num_passed: number | null;
     message: string;
     author_avatar: string;
     commit_url: string;

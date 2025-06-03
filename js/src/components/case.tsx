@@ -16,10 +16,15 @@ const getRate = (
   testCase: SiteFailedTest,
   mapFunc: (SiteCommitTooltip) => number
 ) => {
-  const totalFailed: number = testCase.status_segment_bar
+  const failAndFlaky: number = testCase.status_segment_bar
     .map(mapFunc)
     .reduce((a, b) => a + b);
-  return totalFailed;
+  
+  const totalRuns: number = testCase.status_segment_bar
+    .map(t => (t.num_passed || 0) + (t.num_failed || 0) + (t.num_flaky || 0))
+    .reduce((a, b) => a + b);
+
+  return totalRuns === 0 ? 0 : (failAndFlaky / totalRuns) * 100;
 };
 
 const TestCase: React.FC<Prop> = (props) => {

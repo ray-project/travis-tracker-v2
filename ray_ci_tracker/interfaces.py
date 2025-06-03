@@ -68,6 +68,7 @@ class SiteTravisLink(Mixin):
 class SiteCommitTooltip(Mixin):
     num_failed: Optional[int]
     num_flaky: Optional[int]
+    num_passed: Optional[int]
     message: str
     author_avatar: str
     commit_url: str
