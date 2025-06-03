@@ -783,7 +783,13 @@ def main():
     db.write_buildkite_data(buildkite_status)
 
     print("🔮 Analyzing Data")
-    display = dict()
+
+    # List failed tests in order based on weighting system
+    # The weighting system is:
+    # 1. Recent failures (last 10 commits): score * 1,000,000
+    # 2. Regular failures: score
+    # 3. Flaky tests: score * 0.1
+    # 4. Long-running passed tests: score * 0.001    
     failed_tests = db.list_tests_ordered()
     data_to_display = [
         SiteFailedTest(
