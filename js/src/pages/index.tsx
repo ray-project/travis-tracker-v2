@@ -7,7 +7,6 @@ import LayoutWrapper from "../components/layout";
 import BuildTimeFooter from "../components/time";
 import Title from "../components/title";
 import TestCase from "../components/case";
-import WeeklyGreenMetric from "../components/weeklygreen";
 import StatsPane from "../components/stat";
 import { SiteDisplayRoot } from "../interface";
 import rawData from "../data.json";
@@ -64,8 +63,6 @@ const App: React.FC<PageProps<DataProps>> = ({ data, location }) => {
 
   const { dataSource, columns } = JSON.parse(displayData.table_stat);
   
-  let weeklyGreenMetric = displayData.weekly_green_metric;
-
   let testsToDisplay = displayData.failed_tests;
   testsToDisplay = testsToDisplay.filter(
     (c) => ownerSelection === "all" || ownerSelection === c.owner
@@ -97,8 +94,6 @@ const App: React.FC<PageProps<DataProps>> = ({ data, location }) => {
         size={"small"}
         pagination={false}
       ></Table>
-
-      <WeeklyGreenMetric data={weeklyGreenMetric}></WeeklyGreenMetric>
 
       <Radio.Group
         style={{ paddingTop: "1%" }}
