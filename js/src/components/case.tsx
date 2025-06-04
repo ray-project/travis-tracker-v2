@@ -13,14 +13,26 @@ interface Prop {
 }
 
 const getRate = (
-  testCase: SiteFailedTest,
-  mapFunc: (SiteCommitTooltip) => number
+  commits: SiteCommitTooltip[],
+  includeFlaky: boolean = false
 ) => {
-  const totalFailed: number = testCase.status_segment_bar
-    .map(mapFunc)
-    .reduce((a, b) => a + b);
-  return totalFailed;
-};
+  let flaky = 0, failed = 0, pass = 0;
+  
+  for (const c of commits) {
+    if (c.num_failed === null) {
+      continue;
+    } else if (c.num_failed === 0 && c.num_flaky === 0) {
+      pass += 1;
+    } else if ((c.num_flaky || 0) > 0) {
+      flaky += 1;
+    } else {
+      failed += 1;
+    }
+  }
+
+  const totalRuns = flaky + failed + pass;
+  return totalRuns === 0 ? 0 : ((failed + (includeFlaky ? flaky : 0)) / totalRuns) * 100;
+}
 
 const TestCase: React.FC<Prop> = (props) => {
   const [showModal, setShowModal] = useState(false);
@@ -66,14 +78,14 @@ const TestCase: React.FC<Prop> = (props) => {
 
             <Col span={3}>
               <div className="item failed" style={{ marginTop: "3px" }}></div>
-              {getRate(props.case, (t) => t.num_failed || 0).toFixed(0)}%
+              {getRate(props.case.status_segment_bar, false).toFixed(0)}%
             </Col>
             <Col span={3}>
               <div className="item failed" style={{ marginTop: "3px" }}></div>
               <div className="item flaky" style={{ marginTop: "3px" }}></div>
               {getRate(
-                props.case,
-                (t) => (t.num_flaky || 0) + (t.num_failed || 0)
+                props.case.status_segment_bar,
+                true
               ).toFixed(0)}
               %
             </Col>

@@ -462,7 +462,7 @@ class ResultsDB:
         records_to_insert = []
         for prefix in tqdm(dir_prefixes):
             if not os.path.exists(prefix):
-                # The direcotry dones't exists. It's fine
+                # The directory doesn't exist. It's fine
                 continue
             for build in os.listdir(prefix):
                 dir_name = Path(prefix) / build
@@ -657,14 +657,14 @@ class ResultsDB:
         cursor = self.table.execute(
             """
             -- Commit Tooltip
-            WITH filtered(sha, num_failed, num_flaky) AS (
-                SELECT sha, SUM(status == 'FAILED'), SUM(status == 'FLAKY') as num_failed
+            WITH filtered(sha, num_failed, num_flaky, num_passed) AS (
+                SELECT sha, SUM(status == 'FAILED'), SUM(status == 'FLAKY'), SUM(status == 'PASSED')
                 FROM test_result
                 WHERE test_name == (?)
                 GROUP BY sha
             )
             SELECT commits.sha, commits.message, commits.url, commits.avatar_url,
-                filtered.num_failed, filtered.num_flaky
+                filtered.num_failed, filtered.num_flaky, filtered.num_passed
             FROM commits LEFT JOIN filtered
             ON commits.sha == filtered.sha
             ORDER BY commits.idx
@@ -675,11 +675,12 @@ class ResultsDB:
             SiteCommitTooltip(
                 num_failed=num_failed,
                 num_flaky=num_flaky,
+                num_passed=num_passed,
                 message=msg,
                 author_avatar=avatar,
                 commit_url=url,
             )
-            for _, msg, url, avatar, num_failed, num_flaky in cursor.fetchall()
+            for _, msg, url, avatar, num_failed, num_flaky, num_passed in cursor.fetchall()
         ]
 
     def get_stats(self):
@@ -782,7 +783,13 @@ def main():
     db.write_buildkite_data(buildkite_status)
 
     print("🔮 Analyzing Data")
-    display = dict()
+
+    # List failed tests in order based on weighting system
+    # The weighting system is:
+    # 1. Recent failures (last 10 commits): score * 1,000,000
+    # 2. Regular failures: score
+    # 3. Flaky tests: score * 0.1
+    # 4. Long-running passed tests: score * 0.001    
     failed_tests = db.list_tests_ordered()
     data_to_display = [
         SiteFailedTest(
