@@ -10,7 +10,7 @@ import TestCase from "../components/case";
 import StatsPane from "../components/stat";
 import { SiteDisplayRoot } from "../interface";
 import rawData from "../data.json";
-
+import { getRate } from "../components/case";
 const displayData = rawData as SiteDisplayRoot;
 
 export const query = graphql`
@@ -73,6 +73,13 @@ const App: React.FC<PageProps<DataProps>> = ({ data, location }) => {
   } else if (releaseTestOption == ReleaseTestOption.NoReleaseTest) {
     testsToDisplay = testsToDisplay.filter(t => t.name.indexOf("release://") == -1);
   }
+
+  // Sort by failure rate (highest first)
+  testsToDisplay = testsToDisplay.sort((a, b) => {
+    const rateA = getRate(a.status_segment_bar, false);
+    const rateB = getRate(b.status_segment_bar, false);
+    return rateB - rateA;
+  });
 
   let numHidden = 0;
   if (!showAll) {

@@ -12,7 +12,7 @@ interface Prop {
   githubState: Map<string, any>;
 }
 
-const getRate = (
+export const getRate = (
   commits: SiteCommitTooltip[],
   includeFlaky: boolean = false
 ) => {
