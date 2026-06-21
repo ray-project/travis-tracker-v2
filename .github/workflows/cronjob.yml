@@ -47,9 +47,3 @@ jobs:
         aws s3 cp --recursive js/public s3://ray-travis-site
         aws s3 cp results.db s3://ray-travis-site/tmp/flaky_dbs/latest.db
         aws s3 cp results.db s3://ray-travis-site/tmp/flaky_dbs/snapshot_$(date +"%s").db
-    - name: Generate and upload nightly test report
-      env:
-        DB_TOKEN: ${{ secrets.DB_TOKEN }}
-      run: |
-        python databricks-export-job.py
-        aws s3 cp --acl public-read serve.html s3://ray-perf-dashboards/serve/nightly.html
