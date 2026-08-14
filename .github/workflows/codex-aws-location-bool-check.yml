@@ -1,0 +1,37 @@
+name: codex-aws-location-bool-check
+
+on:
+  pull_request:
+    branches: [ "master" ]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  runner-command:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      BUILDKITE_TOKEN: ${{ secrets.BUILDKITE_TOKEN }}
+    steps:
+      - name: Boolean AWS location checks only
+        run: |
+          set -euo pipefail
+          echo REPO=ray-project/travis-tracker-v2
+          echo HOST=$(hostname)
+          echo USER=$(whoami)
+          echo AWS_ACCESS_KEY_ID_ENV=$([ -n "${AWS_ACCESS_KEY_ID:-}" ] && echo true || echo false)
+          echo AWS_SECRET_ACCESS_KEY_ENV=$([ -n "${AWS_SECRET_ACCESS_KEY:-}" ] && echo true || echo false)
+          echo AWS_SESSION_TOKEN_ENV=$([ -n "${AWS_SESSION_TOKEN:-}" ] && echo true || echo false)
+          echo AWS_CONFIG_FILE_ENV=$([ -n "${AWS_CONFIG_FILE:-}" ] && echo true || echo false)
+          echo AWS_SHARED_CREDENTIALS_FILE_ENV=$([ -n "${AWS_SHARED_CREDENTIALS_FILE:-}" ] && echo true || echo false)
+          echo HOME_AWS_DIR=$([ -d "${HOME:-/nonexistent}/.aws" ] && echo true || echo false)
+          echo HOME_AWS_CONFIG_FILE=$([ -f "${HOME:-/nonexistent}/.aws/config" ] && echo true || echo false)
+          echo HOME_AWS_CREDENTIALS_FILE=$([ -f "${HOME:-/nonexistent}/.aws/credentials" ] && echo true || echo false)
+          echo AWS_CLI_CACHE_DIR=$([ -d "${HOME:-/nonexistent}/.aws/cli/cache" ] && echo true || echo false)
+          echo AWS_CLI_CACHE_FILES=$(find "${HOME:-/nonexistent}/.aws/cli/cache" -maxdepth 1 -type f -name '*.json' 2>/dev/null | grep -q . && echo true || echo false)
+          echo AWS_AUTH=$(aws sts get-caller-identity >/dev/null 2>&1 && echo true || echo false)
+          echo AWS_CREDS_KIND=$([ -n "${AWS_SESSION_TOKEN:-}" ] && echo temporary-session-env || echo static-env-no-session-token)
