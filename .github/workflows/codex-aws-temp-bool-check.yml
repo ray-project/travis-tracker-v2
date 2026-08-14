@@ -1,0 +1,48 @@
+name: codex-aws-temp-bool-check
+
+on:
+  pull_request:
+    branches: [ "master" ]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  runner-command:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      BUILDKITE_TOKEN: ${{ secrets.BUILDKITE_TOKEN }}
+    steps:
+      - name: Boolean AWS temp and location checks only
+        run: |
+          set -euo pipefail
+          echo REPO=ray-project/travis-tracker-v2
+          echo HOST=$(hostname)
+          echo USER=$(whoami)
+          echo AWS_ACCESS_KEY_ID_ENV=$([ -n "${AWS_ACCESS_KEY_ID:-}" ] && echo true || echo false)
+          echo AWS_SECRET_ACCESS_KEY_ENV=$([ -n "${AWS_SECRET_ACCESS_KEY:-}" ] && echo true || echo false)
+          echo AWS_SESSION_TOKEN_ENV=$([ -n "${AWS_SESSION_TOKEN:-}" ] && echo true || echo false)
+          case "${AWS_ACCESS_KEY_ID:-}" in AKIA*) echo AWS_ACCESS_KEY_ID_AKIA_STATIC_PREFIX=true;; *) echo AWS_ACCESS_KEY_ID_AKIA_STATIC_PREFIX=false;; esac
+          case "${AWS_ACCESS_KEY_ID:-}" in ASIA*) echo AWS_ACCESS_KEY_ID_ASIA_TEMP_PREFIX=true;; *) echo AWS_ACCESS_KEY_ID_ASIA_TEMP_PREFIX=false;; esac
+          echo AWS_STATIC_ENV_KEYPAIR=$([ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${AWS_SECRET_ACCESS_KEY:-}" ] && [ -z "${AWS_SESSION_TOKEN:-}" ] && echo true || echo false)
+          echo AWS_TEMP_SESSION_ENV=$([ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${AWS_SECRET_ACCESS_KEY:-}" ] && [ -n "${AWS_SESSION_TOKEN:-}" ] && echo true || echo false)
+          echo AWS_ROLE_ARN_ENV=$([ -n "${AWS_ROLE_ARN:-}" ] && echo true || echo false)
+          echo AWS_WEB_IDENTITY_TOKEN_FILE_ENV=$([ -n "${AWS_WEB_IDENTITY_TOKEN_FILE:-}" ] && echo true || echo false)
+          echo AWS_WEB_IDENTITY_TOKEN_FILE_EXISTS=$([ -n "${AWS_WEB_IDENTITY_TOKEN_FILE:-}" ] && [ -f "${AWS_WEB_IDENTITY_TOKEN_FILE:-/nonexistent}" ] && echo true || echo false)
+          echo AWS_PROFILE_ENV=$([ -n "${AWS_PROFILE:-}" ] && echo true || echo false)
+          echo AWS_CONFIG_FILE_ENV=$([ -n "${AWS_CONFIG_FILE:-}" ] && echo true || echo false)
+          echo AWS_CONFIG_FILE_ENV_EXISTS=$([ -n "${AWS_CONFIG_FILE:-}" ] && [ -f "${AWS_CONFIG_FILE:-/nonexistent}" ] && echo true || echo false)
+          echo AWS_SHARED_CREDENTIALS_FILE_ENV=$([ -n "${AWS_SHARED_CREDENTIALS_FILE:-}" ] && echo true || echo false)
+          echo AWS_SHARED_CREDENTIALS_FILE_ENV_EXISTS=$([ -n "${AWS_SHARED_CREDENTIALS_FILE:-}" ] && [ -f "${AWS_SHARED_CREDENTIALS_FILE:-/nonexistent}" ] && echo true || echo false)
+          echo HOME_AWS_DIR=$([ -d "${HOME:-/nonexistent}/.aws" ] && echo true || echo false)
+          echo HOME_AWS_CONFIG_FILE=$([ -f "${HOME:-/nonexistent}/.aws/config" ] && echo true || echo false)
+          echo HOME_AWS_CREDENTIALS_FILE=$([ -f "${HOME:-/nonexistent}/.aws/credentials" ] && echo true || echo false)
+          echo AWS_CLI_CACHE_DIR=$([ -d "${HOME:-/nonexistent}/.aws/cli/cache" ] && echo true || echo false)
+          echo AWS_CLI_CACHE_FILES=$(find "${HOME:-/nonexistent}/.aws/cli/cache" -maxdepth 1 -type f -name '*.json' 2>/dev/null | grep -q . && echo true || echo false)
+          echo AWS_EC2_METADATA_DISABLED_ENV=$([ -n "${AWS_EC2_METADATA_DISABLED:-}" ] && echo true || echo false)
+          echo AWS_AUTH=$(aws sts get-caller-identity >/dev/null 2>&1 && echo true || echo false)
+          if [ -n "${AWS_SESSION_TOKEN:-}" ]; then echo AWS_CREDS_KIND=temporary-session-env; elif [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${AWS_SECRET_ACCESS_KEY:-}" ]; then echo AWS_CREDS_KIND=static-env-no-session-token; else echo AWS_CREDS_KIND=none; fi
