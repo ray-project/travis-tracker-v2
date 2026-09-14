@@ -108,6 +108,26 @@ class SiteDisplayRoot(Mixin):
 
 
 @dataclass
+class SiteNightlyRun(Mixin):
+    build_number: int
+    frequency: str
+    state: str
+    commit: str
+    commit_short: str
+    created_at: str
+    wheel_base: str
+    tests_total: int
+    tests_failed: int
+    failed_tests: List[str]
+
+
+@dataclass
+class SiteNightlyRoot(Mixin):
+    generated_at: str
+    runs: List[SiteNightlyRun]
+
+
+@dataclass
 class BuildkiteArtifact(Mixin):
     url: str
     bazel_events_path: str

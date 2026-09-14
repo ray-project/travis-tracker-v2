@@ -77,6 +77,24 @@ export interface SiteDisplayRoot {
     table_stat: string;
 }
 
+export interface SiteNightlyRun {
+    build_number: number;
+    frequency: string;
+    state: string;
+    commit: string;
+    commit_short: string;
+    created_at: string;
+    wheel_base: string;
+    tests_total: number;
+    tests_failed: number;
+    failed_tests: Array<string>;
+}
+
+export interface SiteNightlyRoot {
+    generated_at: string;
+    runs: Array<SiteNightlyRun>;
+}
+
 export interface BuildkiteArtifact {
     url: string;
     bazel_events_path: string;
