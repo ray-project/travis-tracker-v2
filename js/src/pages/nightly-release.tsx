@@ -91,7 +91,7 @@ const App: React.FC<PageProps> = () => {
             roughly 265 release tests. Most failing nights are one or two
             flaky or infrastructure-related tests rather than a broken wheel, so
             check the failure count and the test names before drawing a
-            conclusion. Expand a row to see exactly which tests failed.
+            conclusion.
           </>
         }
         style={{ marginBottom: "1rem" }}
@@ -113,18 +113,6 @@ const App: React.FC<PageProps> = () => {
         columns={columns}
         rowKey={(run) => String(run.build_number)}
         pagination={{ pageSize: 30 }}
-        expandable={{
-          rowExpandable: (run) => run.failed_tests.length > 0,
-          expandedRowRender: (run) => (
-            <ul>
-              {run.failed_tests.map((name) => (
-                <li key={name}>
-                  <code>{name}</code>
-                </li>
-              ))}
-            </ul>
-          ),
-        }}
       />
 
       <Typography.Paragraph type="secondary">

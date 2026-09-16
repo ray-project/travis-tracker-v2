@@ -118,7 +118,6 @@ class SiteNightlyRun(Mixin):
     wheel_base: str
     tests_total: int
     tests_failed: int
-    failed_tests: List[str]
 
 
 @dataclass

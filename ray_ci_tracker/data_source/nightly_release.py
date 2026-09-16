@@ -4,12 +4,11 @@ from pathlib import Path
 from typing import List, Optional
 
 import httpx
-from tqdm.asyncio import tqdm_asyncio
-
 from ray_ci_tracker.common import get_or_fetch, retry
 from ray_ci_tracker.interfaces import SiteNightlyRun
 
 BUILDKITE_API = "https://api.buildkite.com/v2"
+BUILDKITE_GRAPHQL = "https://graphql.buildkite.com/v1"
 ORG, PIPELINE = "ray-project", "release"
 WHEEL_BASE = "https://s3-us-west-2.amazonaws.com/ray-wheels/master"
 
@@ -47,6 +46,9 @@ def parse_build(build: dict) -> Optional[SiteNightlyRun]:
     if frequency != NIGHTLY_FREQUENCY:
         return None
 
+    # Only counts are published. Individual test names are deliberately withheld:
+    # this feed is compiled into a public bundle, so anything kept here is readable
+    # by anyone, and the failures are frequently infrastructure rather than Ray.
     tests = [j for j in build.get("jobs", []) if _is_test_job(j)]
     failed = [j for j in tests if j.get("state") in FAILED_STATES]
     sha = build.get("commit") or ""
@@ -63,7 +65,88 @@ def parse_build(build: dict) -> Optional[SiteNightlyRun]:
         wheel_base=f"{WHEEL_BASE}/{sha}/" if sha else "",
         tests_total=len(tests),
         tests_failed=len(failed),
-        failed_tests=sorted(_job_name(j) for j in failed),
+    )
+
+
+# The REST list endpoint returns every build's full job array — ~459MB to publish a
+# 66KB feed, because we want six scalars per build and it ships ~530 job objects.
+# GraphQL lets us select fields, so we ask only for what the page renders.
+#
+# Job labels are still needed to tell release tests from the image-build steps that
+# share the build, so we cannot use a bare `jobs { count }`; but label+state+passed
+# is a small fraction of a REST job object.
+NIGHTLY_GRAPHQL_QUERY = """
+query NightlyBuilds($first: Int!, $after: String) {
+  pipeline(slug: "%s/%s") {
+    builds(branch: ["master"], first: $first, after: $after) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      edges {
+        node {
+          number
+          state
+          commit
+          createdAt
+          env
+          jobs(first: 600) {
+            edges {
+              node {
+                ... on JobTypeCommand {
+                  label
+                  state
+                  passed
+                  retriesCount
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+""" % (ORG, PIPELINE)
+
+
+def _env_to_dict(env_list) -> dict:
+    """Build.env comes back as ["KEY=value", ...] rather than an object."""
+    out = {}
+    for item in env_list or []:
+        key, sep, value = item.partition("=")
+        if sep:
+            out[key] = value
+    return out
+
+
+def parse_graphql_build(node: dict) -> Optional[SiteNightlyRun]:
+    """GraphQL flavour of parse_build; same filtering and counting rules."""
+    env = _env_to_dict(node.get("env"))
+    if env.get("AUTOMATIC") != "1":
+        return None
+    frequency = env.get("RELEASE_FREQUENCY")
+    if frequency != NIGHTLY_FREQUENCY:
+        return None
+
+    jobs = [e["node"] for e in (node.get("jobs") or {}).get("edges", []) if e.get("node")]
+    tests = [j for j in jobs if TEST_JOB_NAME.search((j.get("label") or "").strip())]
+    # GraphQL carries an explicit `passed` boolean rather than REST's state strings.
+    # A job still running has passed=None and is not counted as a failure.
+    failed = [j for j in tests if j.get("passed") is False]
+
+    sha = node.get("commit") or ""
+    state = (node.get("state") or "unknown").lower()
+    return SiteNightlyRun(
+        build_number=node["number"],
+        frequency=frequency,
+        state=state,
+        commit=sha,
+        commit_short=sha[:8],
+        created_at=node.get("createdAt") or "",
+        wheel_base=f"{WHEEL_BASE}/{sha}/" if sha else "",
+        tests_total=len(tests),
+        tests_failed=len(failed),
     )
 
 
@@ -84,28 +167,101 @@ class NightlyReleaseSource:
             return resp.json()
 
     @staticmethod
-    async def fetch_all(cache_path: Path, cached: bool, pages: int = 2):
-        print("💤 Downloading nightly release builds")
-        raw_pages = await tqdm_asyncio.gather(
-            *[
-                get_or_fetch(
-                    cache_path / f"nightly_release/page_{page}.json",
-                    use_cached=cached,
-                    result_cls=None,
-                    many=False,
-                    async_func=lambda page=page: NightlyReleaseSource.fetch_page(page),
-                )
-                for page in range(1, pages + 1)
-            ]
-        )
+    async def fetch_all(
+        cache_path: Path,
+        cached: bool,
+        target_runs: int = 200,
+        max_pages: int = 8,
+    ):
+        """Page back through master builds until `target_runs` nightlies are found.
+
+        Pages are fetched and parsed one at a time rather than gathered. Each raw
+        page is ~85MB because the list endpoint returns every build's full job
+        array, so holding several at once is what would actually hurt; the parsed
+        rows are a few hundred bytes each. Stopping as soon as the target is met
+        also keeps this resilient to the nightly share of master builds drifting
+        (it is ~40% today, but that depends on how often maintainers kick off
+        ad-hoc runs, which has nothing to do with us).
+        """
+        print(f"💤 Downloading nightly release builds (target {target_runs})")
 
         runs, seen = [], set()
-        for builds in raw_pages:
-            for build in builds or []:
+        for page in range(1, max_pages + 1):
+            builds = await get_or_fetch(
+                cache_path / f"nightly_release/page_{page}.json",
+                use_cached=cached,
+                result_cls=None,
+                many=False,
+                async_func=lambda page=page: NightlyReleaseSource.fetch_page(page),
+            )
+            if not builds:
+                print(f"   page {page}: empty, reached the end of available history")
+                break
+
+            for build in builds:
                 run = parse_build(build)
                 if run is not None and run.build_number not in seen:
                     seen.add(run.build_number)
                     runs.append(run)
+            del builds  # release the raw page before fetching the next
+
+            print(f"   page {page}: {len(runs)} nightly runs so far")
+            if len(runs) >= target_runs:
+                break
 
         runs.sort(key=lambda r: r.build_number, reverse=True)
-        return runs
+        return runs[:target_runs]
+
+    @staticmethod
+    @retry
+    async def fetch_graphql_page(after: Optional[str], first: int = 100) -> dict:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                BUILDKITE_GRAPHQL,
+                json={
+                    "query": NIGHTLY_GRAPHQL_QUERY,
+                    "variables": {"first": first, "after": after},
+                },
+                headers={
+                    "Authorization": f"Bearer {os.environ['BUILDKITE_TOKEN']}"
+                },
+                timeout=180.0,
+            )
+            resp.raise_for_status()
+            payload = resp.json()
+            if payload.get("errors"):
+                # The commonest cause is a token without the graphql scope, which is
+                # a separate checkbox from the REST scopes on the token page.
+                raise RuntimeError(f"Buildkite GraphQL error: {payload['errors']}")
+            return payload["data"]["pipeline"]["builds"]
+
+    @staticmethod
+    async def fetch_all_graphql(target_runs: int = 200, max_pages: int = 8):
+        """Cursor-paginate the GraphQL API until `target_runs` nightlies are found."""
+        print(f"💤 Downloading nightly release builds via GraphQL (target {target_runs})")
+
+        runs, seen, cursor = [], set(), None
+        for page in range(1, max_pages + 1):
+            builds = await NightlyReleaseSource.fetch_graphql_page(cursor)
+            edges = builds.get("edges") or []
+            if not edges:
+                print(f"   page {page}: empty, reached the end of available history")
+                break
+
+            for edge in edges:
+                run = parse_graphql_build(edge["node"])
+                if run is not None and run.build_number not in seen:
+                    seen.add(run.build_number)
+                    runs.append(run)
+
+            print(f"   page {page}: {len(runs)} nightly runs so far")
+            if len(runs) >= target_runs:
+                break
+
+            info = builds.get("pageInfo") or {}
+            if not info.get("hasNextPage"):
+                break
+            cursor = info.get("endCursor")
+
+        runs.sort(key=lambda r: r.build_number, reverse=True)
+        return runs[:target_runs]

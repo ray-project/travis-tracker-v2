@@ -87,7 +87,6 @@ export interface SiteNightlyRun {
     wheel_base: string;
     tests_total: number;
     tests_failed: number;
-    failed_tests: Array<string>;
 }
 
 export interface SiteNightlyRoot {
