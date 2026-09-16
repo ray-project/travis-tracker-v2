@@ -29,6 +29,24 @@ TEST_JOB_NAME = re.compile(r"\(.*\) \(\d+\)\s*$")
 FAILED_STATES = {"failed", "broken", "timed_out"}
 
 
+# This feed uses its own token rather than the shared BUILDKITE_TOKEN. The GraphQL
+# API needs the `graphql` scope, which is a separate checkbox from the REST scopes,
+# and widening the shared token would change the credentials the older
+# buildkite_release source runs under too. Falls back to BUILDKITE_TOKEN so local
+# runs and the --api rest path keep working with a single token.
+TOKEN_ENV = "BUILDKITE_NIGHTLY_TOKEN"
+
+
+def _token() -> str:
+    token = os.environ.get(TOKEN_ENV) or os.environ.get("BUILDKITE_TOKEN")
+    if not token:
+        raise RuntimeError(
+            f"Set {TOKEN_ENV} (or BUILDKITE_TOKEN). The default --api graphql path "
+            f"needs a token with the 'graphql' scope; --api rest does not."
+        )
+    return token
+
+
 def _job_name(job: dict) -> str:
     return (job.get("name") or job.get("label") or "").strip()
 
@@ -158,9 +176,7 @@ class NightlyReleaseSource:
             resp = await client.get(
                 f"{BUILDKITE_API}/organizations/{ORG}/pipelines/{PIPELINE}/builds",
                 params={"branch": "master", "per_page": 100, "page": page},
-                headers={
-                    "Authorization": f"Bearer {os.environ['BUILDKITE_TOKEN']}"
-                },
+                headers={"Authorization": f"Bearer {_token()}"},
                 timeout=120.0,
             )
             resp.raise_for_status()
@@ -222,9 +238,7 @@ class NightlyReleaseSource:
                     "query": NIGHTLY_GRAPHQL_QUERY,
                     "variables": {"first": first, "after": after},
                 },
-                headers={
-                    "Authorization": f"Bearer {os.environ['BUILDKITE_TOKEN']}"
-                },
+                headers={"Authorization": f"Bearer {_token()}"},
                 timeout=180.0,
             )
             resp.raise_for_status()

@@ -37,6 +37,9 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         BUILDKITE_TOKEN: ${{ secrets.BUILDKITE_TOKEN }}
+        # Separate token for the nightly release feed: the GraphQL API needs the
+        # 'graphql' scope, which the shared BUILDKITE_TOKEN above does not carry.
+        BUILDKITE_NIGHTLY_TOKEN: ${{ secrets.BUILDKITE_NIGHTLY_TOKEN }}
         # To prevent gatsby build run out of memory
         GATSBY_CPU_COUNT: "1"
         NODE_OPTIONS: "--max-old-space-size=6500"
