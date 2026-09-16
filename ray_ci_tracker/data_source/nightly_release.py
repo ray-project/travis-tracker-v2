@@ -8,7 +8,6 @@ from ray_ci_tracker.common import get_or_fetch, retry
 from ray_ci_tracker.interfaces import SiteNightlyRun
 
 BUILDKITE_API = "https://api.buildkite.com/v2"
-BUILDKITE_GRAPHQL = "https://graphql.buildkite.com/v1"
 ORG, PIPELINE = "ray-project", "release"
 WHEEL_BASE = "https://s3-us-west-2.amazonaws.com/ray-wheels/master"
 
@@ -27,24 +26,6 @@ NIGHTLY_FREQUENCY = "nightly"
 TEST_JOB_NAME = re.compile(r"\(.*\) \(\d+\)\s*$")
 
 FAILED_STATES = {"failed", "broken", "timed_out"}
-
-
-# This feed uses its own token rather than the shared BUILDKITE_TOKEN. The GraphQL
-# API needs the `graphql` scope, which is a separate checkbox from the REST scopes,
-# and widening the shared token would change the credentials the older
-# buildkite_release source runs under too. Falls back to BUILDKITE_TOKEN so local
-# runs and the --api rest path keep working with a single token.
-TOKEN_ENV = "BUILDKITE_NIGHTLY_TOKEN"
-
-
-def _token() -> str:
-    token = os.environ.get(TOKEN_ENV) or os.environ.get("BUILDKITE_TOKEN")
-    if not token:
-        raise RuntimeError(
-            f"Set {TOKEN_ENV} (or BUILDKITE_TOKEN). The default --api graphql path "
-            f"needs a token with the 'graphql' scope; --api rest does not."
-        )
-    return token
 
 
 def _job_name(job: dict) -> str:
@@ -93,81 +74,6 @@ def parse_build(build: dict) -> Optional[SiteNightlyRun]:
 # Job labels are still needed to tell release tests from the image-build steps that
 # share the build, so we cannot use a bare `jobs { count }`; but label+state+passed
 # is a small fraction of a REST job object.
-NIGHTLY_GRAPHQL_QUERY = """
-query NightlyBuilds($first: Int!, $after: String) {
-  pipeline(slug: "%s/%s") {
-    builds(branch: ["master"], first: $first, after: $after) {
-      pageInfo {
-        hasNextPage
-        endCursor
-      }
-      edges {
-        node {
-          number
-          state
-          commit
-          createdAt
-          env
-          jobs(first: 600) {
-            edges {
-              node {
-                ... on JobTypeCommand {
-                  label
-                  state
-                  passed
-                  retriesCount
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-""" % (ORG, PIPELINE)
-
-
-def _env_to_dict(env_list) -> dict:
-    """Build.env comes back as ["KEY=value", ...] rather than an object."""
-    out = {}
-    for item in env_list or []:
-        key, sep, value = item.partition("=")
-        if sep:
-            out[key] = value
-    return out
-
-
-def parse_graphql_build(node: dict) -> Optional[SiteNightlyRun]:
-    """GraphQL flavour of parse_build; same filtering and counting rules."""
-    env = _env_to_dict(node.get("env"))
-    if env.get("AUTOMATIC") != "1":
-        return None
-    frequency = env.get("RELEASE_FREQUENCY")
-    if frequency != NIGHTLY_FREQUENCY:
-        return None
-
-    jobs = [e["node"] for e in (node.get("jobs") or {}).get("edges", []) if e.get("node")]
-    tests = [j for j in jobs if TEST_JOB_NAME.search((j.get("label") or "").strip())]
-    # GraphQL carries an explicit `passed` boolean rather than REST's state strings.
-    # A job still running has passed=None and is not counted as a failure.
-    failed = [j for j in tests if j.get("passed") is False]
-
-    sha = node.get("commit") or ""
-    state = (node.get("state") or "unknown").lower()
-    return SiteNightlyRun(
-        build_number=node["number"],
-        frequency=frequency,
-        state=state,
-        commit=sha,
-        commit_short=sha[:8],
-        created_at=node.get("createdAt") or "",
-        wheel_base=f"{WHEEL_BASE}/{sha}/" if sha else "",
-        tests_total=len(tests),
-        tests_failed=len(failed),
-    )
-
-
 class NightlyReleaseSource:
     @staticmethod
     @retry
@@ -176,12 +82,29 @@ class NightlyReleaseSource:
             resp = await client.get(
                 f"{BUILDKITE_API}/organizations/{ORG}/pipelines/{PIPELINE}/builds",
                 params={"branch": "master", "per_page": 100, "page": page},
-                headers={"Authorization": f"Bearer {_token()}"},
+                headers={
+                    "Authorization": f"Bearer {os.environ['BUILDKITE_TOKEN']}"
+                },
                 timeout=120.0,
             )
             resp.raise_for_status()
             return resp.json()
 
+    # Why REST and not GraphQL, which would return far less data:
+    #
+    # Buildkite prices GraphQL by node count against a hard budget
+    # (ratelimit-limit: 20000 per ~5min window), and the label is the only
+    # reliable way to tell a release test from the image-build steps sharing the
+    # build, so every job has to be fetched. Measured cost is ~600 complexity per
+    # build, i.e. ~33 builds per window. The ~530 master builds behind 200
+    # nightlies would take ~16 windows, about 80 minutes, against a 30-minute
+    # cron. REST does the same work in under three minutes; its cost is ~459MB of
+    # bandwidth, which is not a constrained resource on a CI runner.
+    #
+    # GraphQL is only cheap here if the per-test denominator is given up:
+    # jobs(type: [COMMAND]) { count } is ~540 (image builds included) and the
+    # agentQueryRules queue filter is ~372, because the :tapioca: custom-image
+    # builds share the release queues. Neither is the ~265 the page reports.
     @staticmethod
     async def fetch_all(
         cache_path: Path,
@@ -224,58 +147,6 @@ class NightlyReleaseSource:
             print(f"   page {page}: {len(runs)} nightly runs so far")
             if len(runs) >= target_runs:
                 break
-
-        runs.sort(key=lambda r: r.build_number, reverse=True)
-        return runs[:target_runs]
-
-    @staticmethod
-    @retry
-    async def fetch_graphql_page(after: Optional[str], first: int = 100) -> dict:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                BUILDKITE_GRAPHQL,
-                json={
-                    "query": NIGHTLY_GRAPHQL_QUERY,
-                    "variables": {"first": first, "after": after},
-                },
-                headers={"Authorization": f"Bearer {_token()}"},
-                timeout=180.0,
-            )
-            resp.raise_for_status()
-            payload = resp.json()
-            if payload.get("errors"):
-                # The commonest cause is a token without the graphql scope, which is
-                # a separate checkbox from the REST scopes on the token page.
-                raise RuntimeError(f"Buildkite GraphQL error: {payload['errors']}")
-            return payload["data"]["pipeline"]["builds"]
-
-    @staticmethod
-    async def fetch_all_graphql(target_runs: int = 200, max_pages: int = 8):
-        """Cursor-paginate the GraphQL API until `target_runs` nightlies are found."""
-        print(f"💤 Downloading nightly release builds via GraphQL (target {target_runs})")
-
-        runs, seen, cursor = [], set(), None
-        for page in range(1, max_pages + 1):
-            builds = await NightlyReleaseSource.fetch_graphql_page(cursor)
-            edges = builds.get("edges") or []
-            if not edges:
-                print(f"   page {page}: empty, reached the end of available history")
-                break
-
-            for edge in edges:
-                run = parse_graphql_build(edge["node"])
-                if run is not None and run.build_number not in seen:
-                    seen.add(run.build_number)
-                    runs.append(run)
-
-            print(f"   page {page}: {len(runs)} nightly runs so far")
-            if len(runs) >= target_runs:
-                break
-
-            info = builds.get("pageInfo") or {}
-            if not info.get("hasNextPage"):
-                break
-            cursor = info.get("endCursor")
 
         runs.sort(key=lambda r: r.build_number, reverse=True)
         return runs[:target_runs]

@@ -182,35 +182,23 @@ def perform_analysis(db_path, frontend_json_path):
 @click.option(
     "--max-pages",
     default=8,
-    help="Safety cap on pages of 100 master builds to scan. The API serves ~8.",
-)
-@click.option(
-    "--api",
-    type=click.Choice(["graphql", "rest"]),
-    default="graphql",
     help=(
-        "graphql selects only the fields the page needs; rest downloads every "
-        "build's full job array (~459MB for 200 runs) and is the fallback if the "
-        "token lacks the graphql scope."
+        "Safety cap on pages of 100 master builds to scan; the API serves "
+        "~796 builds total before paging runs dry."
     ),
 )
 @click.pass_context
 @run_as_sync
-async def nightly_release(ctx, frontend_json_path, runs, max_pages, api):
+async def nightly_release(ctx, frontend_json_path, runs, max_pages):
     """Write the nightly release-test status feed for the public page."""
-    if api == "graphql":
-        runs = await NightlyReleaseSource.fetch_all_graphql(
-            target_runs=runs, max_pages=max_pages
-        )
-    else:
-        cache_path = Path("cache_dir")
-        cache_path.mkdir(exist_ok=True)
-        runs = await NightlyReleaseSource.fetch_all(
-            cache_path,
-            ctx.obj["cached_buildkite_release"],
-            target_runs=runs,
-            max_pages=max_pages,
-        )
+    cache_path = Path("cache_dir")
+    cache_path.mkdir(exist_ok=True)
+    runs = await NightlyReleaseSource.fetch_all(
+        cache_path,
+        ctx.obj["cached_buildkite_release"],
+        target_runs=runs,
+        max_pages=max_pages,
+    )
     root = SiteNightlyRoot(
         generated_at=datetime.now(timezone.utc).isoformat(),
         runs=runs,
