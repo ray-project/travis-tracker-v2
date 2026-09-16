@@ -16,7 +16,11 @@ WHEEL_BASE = "https://s3-us-west-2.amazonaws.com/ray-wheels/master"
 # Scheduled nightlies are the only master builds carrying AUTOMATIC=1. Builds
 # triggered from the API or the Buildkite UI are ad-hoc maintainer runs and are
 # deliberately excluded.
-NIGHTLY_FREQUENCIES = {"nightly", "nightly-3x"}
+#
+# Only the plain nightly is shown. "nightly-3x" is a separate 8-test suite rather
+# than a rerun of the full set, so its pass rate is not comparable and mixing the
+# two in one table is misleading. "weekly" is excluded for the same reason.
+NIGHTLY_FREQUENCY = "nightly"
 
 # Release-test jobs are labelled like "foo_test.aws (None) (0)". The image work
 # in the same build (wanda:, :tapioca:, :crane:) and "init" carry no such
@@ -40,7 +44,7 @@ def parse_build(build: dict) -> Optional[SiteNightlyRun]:
     if env.get("AUTOMATIC") != "1":
         return None
     frequency = env.get("RELEASE_FREQUENCY")
-    if frequency not in NIGHTLY_FREQUENCIES:
+    if frequency != NIGHTLY_FREQUENCY:
         return None
 
     tests = [j for j in build.get("jobs", []) if _is_test_job(j)]

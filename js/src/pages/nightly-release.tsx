@@ -1,6 +1,6 @@
 import { PageProps } from "gatsby";
-import React, { useState } from "react";
-import { Alert, Col, Radio, Row, Table, Tag, Typography } from "antd";
+import React from "react";
+import { Alert, Col, Row, Table, Tag, Typography } from "antd";
 
 import LayoutWrapper from "../components/layout";
 import { SiteNightlyRoot, SiteNightlyRun } from "../interface";
@@ -33,9 +33,7 @@ const ResultTag: React.FC<{ run: SiteNightlyRun }> = ({ run }) => {
 };
 
 const App: React.FC<PageProps> = () => {
-  const [frequency, setFrequency] = useState<string>("nightly");
-
-  const runs = nightlyData.runs.filter((r) => r.frequency === frequency);
+  const runs = nightlyData.runs;
 
   const generated = new Date(nightlyData.generated_at);
   const hoursOld = (Date.now() - generated.getTime()) / 36e5;
@@ -109,15 +107,6 @@ const App: React.FC<PageProps> = () => {
           style={{ marginBottom: "1rem" }}
         />
       )}
-
-      <Radio.Group
-        value={frequency}
-        onChange={(e) => setFrequency(e.target.value)}
-        style={{ marginBottom: "1rem" }}
-      >
-        <Radio.Button value="nightly">nightly</Radio.Button>
-        <Radio.Button value="nightly-3x">nightly-3x</Radio.Button>
-      </Radio.Group>
 
       <Table
         dataSource={runs}

@@ -43,7 +43,7 @@ def cli(
     ctx.obj["cached_github"] = cached_github
     ctx.obj["cached_s3"] = cached_s3
     ctx.obj["cached_buildkite"] = cached_buildkite
-    ctx.obj["cached_buildkite_release"] = cached_buildkite
+    ctx.obj["cached_buildkite_release"] = cached_buildkite_release
     ctx.obj["cached_gha"] = cached_gha
 
 
