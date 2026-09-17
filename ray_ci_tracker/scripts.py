@@ -199,6 +199,7 @@ async def nightly_release(ctx, frontend_json_path, runs, max_pages):
         target_runs=runs,
         max_pages=max_pages,
     )
+    await NightlyReleaseSource.drop_expired_image_links(runs)
     root = SiteNightlyRoot(
         generated_at=datetime.now(timezone.utc).isoformat(),
         runs=runs,

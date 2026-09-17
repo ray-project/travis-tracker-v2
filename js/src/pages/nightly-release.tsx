@@ -68,6 +68,25 @@ const App: React.FC<PageProps> = () => {
           </a>
         ) : null,
     },
+    {
+      title: "Docker image",
+      dataIndex: "image_tags_url",
+      // Blank when DockerHub has aged the nightly tags out (~5 months). Say so
+      // rather than leaving the cell empty, which reads as a rendering fault.
+      render: (url: string) =>
+        url ? (
+          <a href={url} target="_blank" rel="noreferrer">
+            images
+          </a>
+        ) : (
+          <span
+            style={{ color: "rgba(0,0,0,0.35)" }}
+            title="Nightly images for this commit are no longer on DockerHub"
+          >
+            n/a
+          </span>
+        ),
+    },
   ];
 
   return (

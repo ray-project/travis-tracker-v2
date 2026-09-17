@@ -11,6 +11,16 @@ BUILDKITE_API = "https://api.buildkite.com/v2"
 ORG, PIPELINE = "ray-project", "release"
 WHEEL_BASE = "https://s3-us-west-2.amazonaws.com/ray-wheels/master"
 
+# Nightly images are tagged nightly.{YYMMDD}.{sha[:6]} with ~300 python/CUDA
+# variants per commit. The date comes from when the image was built rather than
+# when the release tests ran, so composing a tag risks an off-by-one-day 404.
+# Filtering DockerHub by the six-character sha alone is date-independent and
+# lands on every variant for that commit.
+IMAGE_TAGS_URL = "https://hub.docker.com/r/rayproject/ray/tags?name="
+DOCKERHUB_TAGS_API = (
+    "https://hub.docker.com/v2/repositories/rayproject/ray/tags?page_size=1&name="
+)
+
 # Scheduled nightlies are the only master builds carrying AUTOMATIC=1. Builds
 # triggered from the API or the Buildkite UI are ad-hoc maintainer runs and are
 # deliberately excluded.
@@ -62,6 +72,7 @@ def parse_build(build: dict) -> Optional[SiteNightlyRun]:
         commit_short=sha[:8],
         created_at=build.get("created_at") or "",
         wheel_base=f"{WHEEL_BASE}/{sha}/" if sha else "",
+        image_tags_url=f"{IMAGE_TAGS_URL}{sha[:6]}" if sha else "",
         tests_total=len(tests),
         tests_failed=len(failed),
     )
@@ -150,3 +161,48 @@ class NightlyReleaseSource:
 
         runs.sort(key=lambda r: r.build_number, reverse=True)
         return runs[:target_runs]
+
+    @staticmethod
+    async def _has_images(run) -> bool:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                DOCKERHUB_TAGS_API + run.commit[:6], timeout=20.0
+            )
+            resp.raise_for_status()
+            return (resp.json().get("count") or 0) > 0
+
+    @staticmethod
+    async def drop_expired_image_links(runs) -> None:
+        """Blank image links for commits whose nightly images have aged out.
+
+        DockerHub retains nightly tags for roughly five months while this feed
+        spans seven or more, so a third of rows would otherwise point at an empty
+        tag filter, which reads as a broken link. Retention is a clean cutoff by
+        date, so a bisect finds it in ~8 requests rather than one per run.
+
+        Best effort: if DockerHub is unreachable the links are left intact rather
+        than failing the build, since this runs inside `make data` and a raised
+        exception here would stop the whole site from deploying.
+        """
+        if not runs:
+            return
+        try:
+            if await NightlyReleaseSource._has_images(runs[-1]):
+                return  # even the oldest run still has images
+            lo, hi = 0, len(runs) - 1
+            while lo < hi:
+                mid = (lo + hi + 1) // 2
+                if await NightlyReleaseSource._has_images(runs[mid]):
+                    lo = mid
+                else:
+                    hi = mid - 1
+            expired = 0
+            for run in runs[lo + 1 :]:
+                run.image_tags_url = ""
+                expired += 1
+            print(
+                f"   {expired} run(s) older than {runs[lo].created_at[:10]} have no "
+                f"nightly images left on DockerHub; image links omitted"
+            )
+        except Exception as e:
+            print(f"   warning: could not check DockerHub image retention ({e})")

@@ -85,6 +85,7 @@ export interface SiteNightlyRun {
     commit_short: string;
     created_at: string;
     wheel_base: string;
+    image_tags_url: string;
     tests_total: number;
     tests_failed: number;
 }

@@ -116,6 +116,7 @@ class SiteNightlyRun(Mixin):
     commit_short: str
     created_at: str
     wheel_base: str
+    image_tags_url: str
     tests_total: int
     tests_failed: int
 
