@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from pathlib import Path
 
 import boto3
@@ -7,9 +8,15 @@ import ujson as json
 from ray_ci_tracker.common import run_as_sync
 from ray_ci_tracker.data_source.buildkite_release import BuildkiteReleaseSource
 from ray_ci_tracker.data_source.github import GithubDataSource
+from ray_ci_tracker.data_source.nightly_release import NightlyReleaseSource
 from ray_ci_tracker.data_source.s3 import S3DataSource
 from ray_ci_tracker.database import ResultsDBReader, ResultsDBWriter
-from ray_ci_tracker.interfaces import SiteDisplayRoot, SiteFailedTest, SiteWeeklyGreenMetric
+from ray_ci_tracker.interfaces import (
+    SiteDisplayRoot,
+    SiteFailedTest,
+    SiteNightlyRoot,
+    SiteWeeklyGreenMetric,
+)
 
 
 AWS_ROLE = "arn:aws:iam::029272617770:role/go-flaky-dashboard"
@@ -36,7 +43,7 @@ def cli(
     ctx.obj["cached_github"] = cached_github
     ctx.obj["cached_s3"] = cached_s3
     ctx.obj["cached_buildkite"] = cached_buildkite
-    ctx.obj["cached_buildkite_release"] = cached_buildkite
+    ctx.obj["cached_buildkite_release"] = cached_buildkite_release
     ctx.obj["cached_gha"] = cached_gha
 
 
@@ -167,3 +174,37 @@ def perform_analysis(db_path, frontend_json_path):
     print("⌛️ Writing Out to Frontend", frontend_json_path)
     with open(frontend_json_path, "w") as f:
         json.dump(root_display.to_dict(), f)
+
+
+@cli.command("nightly")
+@click.argument("frontend_json_path")
+@click.option("--runs", default=200, help="How many nightly runs to publish.")
+@click.option(
+    "--max-pages",
+    default=8,
+    help=(
+        "Safety cap on pages of 100 master builds to scan; the API serves "
+        "~796 builds total before paging runs dry."
+    ),
+)
+@click.pass_context
+@run_as_sync
+async def nightly_release(ctx, frontend_json_path, runs, max_pages):
+    """Write the nightly release-test status feed for the public page."""
+    cache_path = Path("cache_dir")
+    cache_path.mkdir(exist_ok=True)
+    runs = await NightlyReleaseSource.fetch_all(
+        cache_path,
+        ctx.obj["cached_buildkite_release"],
+        target_runs=runs,
+        max_pages=max_pages,
+    )
+    await NightlyReleaseSource.drop_expired_image_links(runs)
+    root = SiteNightlyRoot(
+        generated_at=datetime.now(timezone.utc).isoformat(),
+        runs=runs,
+    )
+
+    print(f"⌛️ Writing {len(runs)} nightly runs to", frontend_json_path)
+    with open(frontend_json_path, "w") as f:
+        json.dump(root.to_dict(), f)
