@@ -149,13 +149,25 @@ class NightlyReleaseSource:
 
         runs, seen = [], set()
         for page in range(1, max_pages + 1):
-            builds = await get_or_fetch(
-                cache_path / f"nightly_release/page_{page}.json",
-                use_cached=cached,
-                result_cls=None,
-                many=False,
-                async_func=lambda page=page: NightlyReleaseSource.fetch_page(page),
-            )
+            # get_or_fetch always writes what it fetched, so a later --cached
+            # run can replay it. That is worth paying for locally, where it
+            # turns a multi-minute fetch into an instant one; it is pure
+            # overhead in CI, where the cache directory does not outlive the
+            # run. A raw page is tens of megabytes and json.dumps materialises
+            # a second full copy before the write, so skip the helper entirely
+            # when caching is off.
+            if cached:
+                builds = await get_or_fetch(
+                    cache_path / f"nightly_release/page_{page}.json",
+                    use_cached=True,
+                    result_cls=None,
+                    many=False,
+                    async_func=lambda page=page: NightlyReleaseSource.fetch_page(
+                        page
+                    ),
+                )
+            else:
+                builds = await NightlyReleaseSource.fetch_page(page)
             if not builds:
                 print(f"   page {page}: empty, reached the end of available history")
                 break

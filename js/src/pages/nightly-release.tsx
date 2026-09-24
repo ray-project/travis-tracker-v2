@@ -1,8 +1,9 @@
 import { PageProps } from "gatsby";
 import React from "react";
-import { Alert, Col, Row, Table, Tag, Typography } from "antd";
+import { Alert, Table, Tag, Typography } from "antd";
 
 import LayoutWrapper from "../components/layout";
+import Title from "../components/title";
 import { SiteNightlyRoot, SiteNightlyRun } from "../interface";
 import rawData from "../nightly.json";
 
@@ -145,13 +146,9 @@ const App: React.FC<PageProps> = () => {
 
   return (
     <LayoutWrapper>
-      <Row justify="space-around" align="middle">
-        <Col flex="auto">
-          <Typography.Title level={1}>
-            Ray Nightly Release Test Status
-          </Typography.Title>
-        </Col>
-      </Row>
+      <Title></Title>
+
+      <Typography.Title level={2}>Nightly release test status</Typography.Title>
 
       <Alert
         type="info"
