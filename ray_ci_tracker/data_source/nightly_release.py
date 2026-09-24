@@ -35,7 +35,6 @@ NIGHTLY_FREQUENCY = "nightly"
 # suffix, and counting them roughly doubles the apparent test total.
 TEST_JOB_NAME = re.compile(r"\(.*\) \(\d+\)\s*$")
 
-FAILED_STATES = {"failed", "broken", "timed_out"}
 
 
 def _job_name(job: dict) -> str:
@@ -55,18 +54,20 @@ def parse_build(build: dict) -> Optional[SiteNightlyRun]:
     if frequency != NIGHTLY_FREQUENCY:
         return None
 
-    # Only counts are published. Individual test names are deliberately withheld:
-    # this feed is compiled into a public bundle, so anything kept here is readable
-    # by anyone, and the failures are frequently infrastructure rather than Ray.
+    # Counted, not published: only the number of test jobs leaves this function,
+    # to tell a run that produced none from one that did. Individual test names
+    # are deliberately withheld -- this feed is compiled into a public bundle, so
+    # anything kept here is readable by anyone, and the failures are frequently
+    # infrastructure rather than Ray.
     tests = [j for j in build.get("jobs", []) if _is_test_job(j)]
-    failed = [j for j in tests if j.get("state") in FAILED_STATES]
     sha = build.get("commit") or ""
 
     return SiteNightlyRun(
         build_number=build["number"],
         frequency=frequency,
-        # A run that never got past init has no tests to speak of; the frontend
-        # renders these as "incomplete" rather than as a pass.
+        # The page's verdict comes from this: Buildkite already aggregates every
+        # job in the build into one result. A non-terminal state renders as
+        # "in progress", and a run with no test jobs as "incomplete".
         state=build.get("state") or "unknown",
         commit=sha,
         commit_short=sha[:8],
@@ -74,7 +75,6 @@ def parse_build(build: dict) -> Optional[SiteNightlyRun]:
         wheel_base=f"{WHEEL_BASE}/{sha}/" if sha else "",
         image_tags_url=f"{IMAGE_TAGS_URL}{sha[:6]}" if sha else "",
         tests_total=len(tests),
-        tests_failed=len(failed),
     )
 
 

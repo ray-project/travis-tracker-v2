@@ -12,24 +12,37 @@ const GITHUB_COMMIT = "https://github.com/ray-project/ray/commit";
 
 // A run that never produced test jobs (aborted at init, cancelled) must not be
 // rendered as a pass — it carries no signal about the wheel either way.
-const isIncomplete = (run: SiteNightlyRun) =>
-  run.tests_total === 0 || run.state === "canceled";
+// The verdict comes from Buildkite's own build state, not from a per-job
+// tally. Buildkite already aggregates every job in the build into one result,
+// and it is the only signal that stays correct when the test jobs never ran at
+// all: a job whose dependency failed is neither passed nor failed, so a tally
+// that enumerates failure states scores it as a pass.
+//
+// Build states that mean the run is over. Anything else -- running, scheduled,
+// canceling -- is still moving and gets no verdict.
+const TERMINAL_STATES = new Set([
+  "passed",
+  "failed",
+  "canceled",
+  "blocked",
+  "skipped",
+  "not_run",
+  "finished",
+]);
 
 const ResultTag: React.FC<{ run: SiteNightlyRun }> = ({ run }) => {
-  if (isIncomplete(run)) {
+  if (!TERMINAL_STATES.has(run.state)) {
+    return <Tag color="blue">IN PROGRESS</Tag>;
+  }
+  // A run that never produced test jobs, or was cancelled, has no result to
+  // report either way; saying PASSED there would be a false assurance.
+  if (run.tests_total === 0 || run.state === "canceled") {
     return <Tag color="default">INCOMPLETE</Tag>;
   }
-  if (run.tests_failed === 0) {
-    return <Tag color="green">ALL {run.tests_total} PASSED</Tag>;
+  if (run.state === "passed") {
+    return <Tag color="green">PASSED</Tag>;
   }
-  // Most red nights are a couple of flaky tests; a handful are real breakage.
-  // Colouring by magnitude keeps those two cases visually distinct.
-  const color = run.tests_failed > 10 ? "red" : "orange";
-  return (
-    <Tag color={color}>
-      {run.tests_failed} of {run.tests_total} FAILED
-    </Tag>
-  );
+  return <Tag color="red">FAILED</Tag>;
 };
 
 const App: React.FC<PageProps> = () => {

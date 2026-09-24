@@ -117,8 +117,9 @@ class SiteNightlyRun(Mixin):
     created_at: str
     wheel_base: str
     image_tags_url: str
+    # Only used to tell a run that produced no test jobs from one that did;
+    # the verdict itself comes from `state`.
     tests_total: int
-    tests_failed: int
 
 
 @dataclass

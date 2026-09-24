@@ -86,8 +86,9 @@ export interface SiteNightlyRun {
     created_at: string;
     wheel_base: string;
     image_tags_url: string;
+    // Only used to tell a run that produced no test jobs from one that did;
+    // the verdict itself comes from `state`.
     tests_total: number;
-    tests_failed: number;
 }
 
 export interface SiteNightlyRoot {
