@@ -30,6 +30,42 @@ const TERMINAL_STATES = new Set([
   "finished",
 ]);
 
+// Age of the feed, rendered as one always-present line rather than a banner
+// that appears only when stale. Gatsby evaluates this during `gatsby build`,
+// minutes after the feed was written, so a conditional element would be absent
+// from the published HTML and inserted only when React hydrates -- a structural
+// mismatch, and invisible to anything reading the static page. Keeping the
+// element constant and varying only its text avoids that.
+const STALE_AFTER_HOURS = 12;
+
+const DataAge: React.FC<{ generatedAt: string }> = ({ generatedAt }) => {
+  const parsed = Date.parse(generatedAt);
+  // An unparseable timestamp counts as stale. This is the only control telling
+  // a reader the feed stopped updating, and `NaN > 12` is false, so comparing
+  // without this check would silently switch the warning off in exactly the
+  // case where something has gone wrong with the data.
+  const unknown = Number.isNaN(parsed);
+  const hoursOld = unknown ? Infinity : (Date.now() - parsed) / 36e5;
+  const stale = hoursOld > STALE_AFTER_HOURS;
+
+  if (unknown) {
+    return (
+      <Typography.Paragraph type="warning">
+        This page could not read when its data was last refreshed, so it may be
+        out of date.
+      </Typography.Paragraph>
+    );
+  }
+  return (
+    <Typography.Paragraph type={stale ? "warning" : "secondary"}>
+      Data refreshed {new Date(parsed).toUTCString()}
+      {stale
+        ? ` — over ${STALE_AFTER_HOURS} hours ago, so the refresh job may be failing.`
+        : "."}
+    </Typography.Paragraph>
+  );
+};
+
 const ResultTag: React.FC<{ run: SiteNightlyRun }> = ({ run }) => {
   if (!TERMINAL_STATES.has(run.state)) {
     return <Tag color="blue">IN PROGRESS</Tag>;
@@ -47,9 +83,6 @@ const ResultTag: React.FC<{ run: SiteNightlyRun }> = ({ run }) => {
 
 const App: React.FC<PageProps> = () => {
   const runs = nightlyData.runs;
-
-  const generated = new Date(nightlyData.generated_at);
-  const hoursOld = (Date.now() - generated.getTime()) / 36e5;
 
   const columns = [
     {
@@ -137,17 +170,6 @@ const App: React.FC<PageProps> = () => {
         style={{ marginBottom: "1rem" }}
       />
 
-      {hoursOld > 12 && (
-        <Alert
-          type="warning"
-          showIcon
-          message={`This data is ${Math.floor(
-            hoursOld
-          )} hours old — the refresh job may be failing.`}
-          style={{ marginBottom: "1rem" }}
-        />
-      )}
-
       <Table
         dataSource={runs}
         columns={columns}
@@ -155,9 +177,7 @@ const App: React.FC<PageProps> = () => {
         pagination={{ pageSize: 30 }}
       />
 
-      <Typography.Paragraph type="secondary">
-        Last updated {nightlyData.generated_at}.
-      </Typography.Paragraph>
+      <DataAge generatedAt={nightlyData.generated_at} />
     </LayoutWrapper>
   );
 };
