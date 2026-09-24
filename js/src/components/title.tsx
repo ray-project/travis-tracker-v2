@@ -21,7 +21,10 @@ const Title: React.FC = () => (
       <Typography.Title level={5}>
         <Link to="/">Flaky tests</Link>
         {" · "}
-        <Link to="/nightly-release/">Nightly release status</Link>
+        {/* A plain <a> to the index.html, not <Link to="/nightly-release/">:
+            CloudFront does not resolve directory URLs to index.html (see #69),
+            so only the full object key loads when fetched directly. */}
+        <a href="/nightly-release/index.html">Nightly release status</a>
       </Typography.Title>
     </Col>
     <Col span={2}>
