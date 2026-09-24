@@ -74,9 +74,17 @@ const App: React.FC<PageProps> = () => {
     {
       title: "Nightly wheel",
       dataIndex: "wheel_base",
+      // The bucket serves no HTML index, so this is an S3 ListObjectsV2 query:
+      // it renders as an XML listing of every wheel built for the commit. Say
+      // so in the tooltip, because the destination is not a normal web page.
       render: (wheelBase: string) =>
         wheelBase ? (
-          <a href={wheelBase} target="_blank" rel="noreferrer">
+          <a
+            href={wheelBase}
+            target="_blank"
+            rel="noreferrer"
+            title="Lists every wheel built for this commit (raw S3 XML listing)"
+          >
             wheels
           </a>
         ) : null,

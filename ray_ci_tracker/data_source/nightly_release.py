@@ -9,7 +9,15 @@ from ray_ci_tracker.interfaces import SiteNightlyRun
 
 BUILDKITE_API = "https://api.buildkite.com/v2"
 ORG, PIPELINE = "ray-project", "release"
-WHEEL_BASE = "https://s3-us-west-2.amazonaws.com/ray-wheels/master"
+# The wheels for a commit live under this prefix, but the bucket has no static
+# website hosting: fetching the prefix as a path returns NoSuchKey, not a file
+# listing, so a bare ".../master/<sha>/" link is dead for every row. The S3
+# ListObjectsV2 query form is readable anonymously and returns the whole set
+# (a commit carries ~24 objects, well inside the 1000-key page, so the result
+# is never truncated). An unknown commit returns an empty listing rather than
+# an error, which is the right behaviour for a sha whose wheels have aged out.
+WHEEL_BUCKET_URL = "https://ray-wheels.s3.us-west-2.amazonaws.com"
+WHEEL_PREFIX = "master"
 
 # Nightly images are tagged nightly.{YYMMDD}.{sha[:6]} with ~300 python/CUDA
 # variants per commit. The date comes from when the image was built rather than
@@ -72,7 +80,11 @@ def parse_build(build: dict) -> Optional[SiteNightlyRun]:
         commit=sha,
         commit_short=sha[:8],
         created_at=build.get("created_at") or "",
-        wheel_base=f"{WHEEL_BASE}/{sha}/" if sha else "",
+        wheel_base=(
+            f"{WHEEL_BUCKET_URL}/?list-type=2&prefix={WHEEL_PREFIX}/{sha}/"
+            if sha
+            else ""
+        ),
         image_tags_url=f"{IMAGE_TAGS_URL}{sha[:6]}" if sha else "",
         tests_total=len(tests),
     )
