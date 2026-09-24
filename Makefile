@@ -6,6 +6,7 @@ data:
 	ray-ci download cache_dir
 	ray-ci etl cache_dir results.db
 	ray-ci analysis results.db js/src/data.json
+	ray-ci nightly js/src/nightly.json
 
 site: data
 	cd js; yarn; yarn build
