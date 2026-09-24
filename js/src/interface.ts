@@ -84,7 +84,8 @@ export interface SiteNightlyRun {
     commit: string;
     commit_short: string;
     created_at: string;
-    wheel_base: string;
+    // Filenames only; the page rebuilds each URL from the bucket prefix + sha.
+    wheels: Array<string>;
     image_tags_url: string;
     // Only used to tell a run that produced no test jobs from one that did;
     // the verdict itself comes from `state`.

@@ -10,6 +10,36 @@ import rawData from "../nightly.json";
 const nightlyData = rawData as SiteNightlyRoot;
 
 const GITHUB_COMMIT = "https://github.com/ray-project/ray/commit";
+const WHEEL_BUCKET = "https://ray-wheels.s3.us-west-2.amazonaws.com/master";
+
+// One row per wheel, each a direct download. The bucket serves no HTML index
+// and sends no CORS headers, so the filenames are resolved at build time and
+// shipped in the feed; only the shared prefix is rebuilt here.
+const WheelList: React.FC<{ run: SiteNightlyRun }> = ({ run }) => {
+  if (run.wheels.length === 0) {
+    return (
+      <Typography.Text type="secondary">
+        No wheels are in the bucket for this commit — nightly wheels are removed
+        after a few months.
+      </Typography.Text>
+    );
+  }
+  return (
+    <ul style={{ margin: 0, paddingLeft: "1.5rem" }}>
+      {run.wheels.map((name) => (
+        <li key={name}>
+          <a
+            href={`${WHEEL_BUCKET}/${run.commit}/${name}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <code>{name}</code>
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+};
 
 // A run that never produced test jobs (aborted at init, cancelled) must not be
 // rendered as a pass — it carries no signal about the wheel either way.
@@ -106,22 +136,17 @@ const App: React.FC<PageProps> = () => {
       render: (_: unknown, run: SiteNightlyRun) => <ResultTag run={run} />,
     },
     {
-      title: "Nightly wheel",
-      dataIndex: "wheel_base",
-      // The bucket serves no HTML index, so this is an S3 ListObjectsV2 query:
-      // it renders as an XML listing of every wheel built for the commit. Say
-      // so in the tooltip, because the destination is not a normal web page.
-      render: (wheelBase: string) =>
-        wheelBase ? (
-          <a
-            href={wheelBase}
-            target="_blank"
-            rel="noreferrer"
-            title="Lists every wheel built for this commit (raw S3 XML listing)"
-          >
-            wheels
-          </a>
-        ) : null,
+      // Expanding the row lists the wheels; this cell just says how many there
+      // are, so a commit whose wheels have aged out is visible without opening
+      // it.
+      title: "Nightly wheels",
+      key: "wheels",
+      render: (_: unknown, run: SiteNightlyRun) =>
+        run.wheels.length === 0 ? (
+          <Typography.Text type="secondary">none</Typography.Text>
+        ) : (
+          <Typography.Text>{run.wheels.length}</Typography.Text>
+        ),
     },
     {
       title: "Docker image",
@@ -171,6 +196,10 @@ const App: React.FC<PageProps> = () => {
         dataSource={runs}
         columns={columns}
         rowKey={(run) => String(run.build_number)}
+        expandable={{
+          expandedRowRender: (run) => <WheelList run={run} />,
+          rowExpandable: (run) => run.wheels.length > 0,
+        }}
         pagination={{ pageSize: 30 }}
       />
 

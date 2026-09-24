@@ -115,7 +115,10 @@ class SiteNightlyRun(Mixin):
     commit: str
     commit_short: str
     created_at: str
-    wheel_base: str
+    # Wheel filenames for this commit, not full URLs: every one shares the same
+    # bucket-and-sha prefix, which the page rebuilds. Empty when the commit's
+    # wheels have aged out of the bucket, or when the listing could not be read.
+    wheels: List[str]
     image_tags_url: str
     # Only used to tell a run that produced no test jobs from one that did;
     # the verdict itself comes from `state`.

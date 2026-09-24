@@ -1,3 +1,4 @@
+import asyncio
 import os
 import re
 from pathlib import Path
@@ -18,6 +19,9 @@ ORG, PIPELINE = "ray-project", "release"
 # an error, which is the right behaviour for a sha whose wheels have aged out.
 WHEEL_BUCKET_URL = "https://ray-wheels.s3.us-west-2.amazonaws.com"
 WHEEL_PREFIX = "master"
+
+# One listing request per run, so cap the fan-out rather than opening 200 at once.
+_WHEEL_LIST_CONCURRENCY = 16
 
 # Nightly images are tagged nightly.{YYMMDD}.{sha[:6]} with ~300 python/CUDA
 # variants per commit. The date comes from when the image was built rather than
@@ -80,11 +84,8 @@ def parse_build(build: dict) -> Optional[SiteNightlyRun]:
         commit=sha,
         commit_short=sha[:8],
         created_at=build.get("created_at") or "",
-        wheel_base=(
-            f"{WHEEL_BUCKET_URL}/?list-type=2&prefix={WHEEL_PREFIX}/{sha}/"
-            if sha
-            else ""
-        ),
+        # Filled in later by attach_wheel_names; one listing request per run.
+        wheels=[],
         image_tags_url=f"{IMAGE_TAGS_URL}{sha[:6]}" if sha else "",
         tests_total=len(tests),
     )
@@ -194,6 +195,58 @@ class NightlyReleaseSource:
             )
             resp.raise_for_status()
             return (resp.json().get("count") or 0) > 0
+
+    @staticmethod
+    @staticmethod
+    @retry
+    async def _fetch_wheel_names(sha: str) -> List[str]:
+        """Return the wheel filenames the bucket holds for one commit.
+
+        The bucket is readable anonymously and sends no CORS headers, so the
+        page cannot do this itself: the listing has to be resolved here and
+        shipped in the feed. A commit carries a couple of dozen objects, well
+        inside the 1000-key page, so there is no continuation to follow.
+        """
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                WHEEL_BUCKET_URL,
+                params={"list-type": "2", "prefix": f"{WHEEL_PREFIX}/{sha}/"},
+                timeout=30.0,
+            )
+            resp.raise_for_status()
+            return [
+                key.rsplit("/", 1)[-1]
+                for key in re.findall(r"<Key>([^<]+)</Key>", resp.text)
+                if key.endswith(".whl")
+            ]
+
+    @staticmethod
+    async def attach_wheel_names(runs) -> None:
+        """Fill in each run's wheel list, concurrently and best effort.
+
+        Runs inside `make data`; a raised exception here would stop the whole
+        site deploying over a link list, so a commit whose listing cannot be
+        read keeps an empty list and renders as "no wheels" rather than
+        failing the build.
+        """
+        if not runs:
+            return
+        sem = asyncio.Semaphore(_WHEEL_LIST_CONCURRENCY)
+
+        async def one(run):
+            if not run.commit:
+                return
+            async with sem:
+                try:
+                    run.wheels = await NightlyReleaseSource._fetch_wheel_names(
+                        run.commit
+                    )
+                except Exception as e:  # noqa: BLE001
+                    print(f"   wheel listing failed for {run.commit_short}: {e}")
+
+        await asyncio.gather(*(one(r) for r in runs))
+        listed = sum(1 for r in runs if r.wheels)
+        print(f"   wheel listings: {listed}/{len(runs)} runs have wheels")
 
     @staticmethod
     async def drop_expired_image_links(runs) -> None:
