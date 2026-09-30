@@ -16,7 +16,7 @@ const Title: React.FC = () => (
     <Col flex="auto"></Col>
     <Col span={2}>
       <Typography.Title level={3}>
-        <Link to="https://anyscale-hq.notion.site/Public-Ray-Flaky-Test-Tracker-55b2edc397364b8ca8cbe3b26cbc6e1a">
+        <Link to="https://app.notion.com/p/anyscale-hq/Public-Ray-Flaky-Test-Tracker-55b2edc397364b8ca8cbe3b26cbc6e1a">
           <InfoCircleOutlined></InfoCircleOutlined>
         </Link>
       </Typography.Title>
