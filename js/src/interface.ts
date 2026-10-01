@@ -77,6 +77,26 @@ export interface SiteDisplayRoot {
     table_stat: string;
 }
 
+export interface SiteNightlyRun {
+    build_number: number;
+    frequency: string;
+    state: string;
+    commit: string;
+    commit_short: string;
+    created_at: string;
+    // Filenames only; the page rebuilds each URL from the bucket prefix + sha.
+    wheels: Array<string>;
+    image_tags_url: string;
+    // Only used to tell a run that produced no test jobs from one that did;
+    // the verdict itself comes from `state`.
+    tests_total: number;
+}
+
+export interface SiteNightlyRoot {
+    generated_at: string;
+    runs: Array<SiteNightlyRun>;
+}
+
 export interface BuildkiteArtifact {
     url: string;
     bazel_events_path: string;
