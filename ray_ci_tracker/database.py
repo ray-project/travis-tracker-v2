@@ -1,16 +1,16 @@
 from collections import defaultdict
-import dataclasses
+from concurrent.futures import ThreadPoolExecutor
 from itertools import chain
 from sqlite3 import connect
-from typing import List, Optional
+from typing import Dict, Iterable, List, Optional
 
 import boto3
 import numpy as np
 import ujson as json
+from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from ray_ci_tracker.interfaces import (
-    BuildkitePRBuildTime,
     BuildkiteStatus,
     BuildResult,
     GHAJobStat,
@@ -20,15 +20,48 @@ from ray_ci_tracker.interfaces import (
     SiteTravisLink,
 )
 
+TEST_STATE_BUCKET = "ray-ci-results"
+TEST_STATE_PREFIX = "ray_tests/"
+TEST_STATE_FETCH_WORKERS = 32
+
+
+def fetch_test_states(test_names: Iterable[str]) -> Dict[str, str]:
+    """test name -> its state in s3://ray-ci-results/ray_tests/, or "passing" if it has none.
+
+    Lists the prefix once, so tests without a blob cost no request, then fetches the rest
+    concurrently through one shared client (clients are thread-safe; building one per lookup
+    was most of the old ~10 minute cost).
+    """
+    s3 = boto3.client("s3", config=Config(max_pool_connections=TEST_STATE_FETCH_WORKERS))
+    keys = {name: f"{TEST_STATE_PREFIX}{name.replace('/', '_')}.json" for name in set(test_names)}
+
+    try:
+        pages = s3.get_paginator("list_objects_v2").paginate(
+            Bucket=TEST_STATE_BUCKET, Prefix=TEST_STATE_PREFIX
+        )
+        existing = {obj["Key"] for page in pages for obj in page.get("Contents", [])}
+        to_fetch = [name for name, key in keys.items() if key in existing]
+    except ClientError as e:
+        print(f"Could not list {TEST_STATE_PREFIX}, fetching every test state: {e}")
+        to_fetch = list(keys)
+
+    def fetch(name: str) -> str:
+        try:
+            body = s3.get_object(Bucket=TEST_STATE_BUCKET, Key=keys[name])["Body"].read()
+            return json.loads(body).get("state", "passing")
+        except ClientError as e:
+            print(f"Failed to get test state for {name}: {e}")
+            return "passing"
+
+    states = dict.fromkeys(keys, "passing")
+    with ThreadPoolExecutor(TEST_STATE_FETCH_WORKERS) as pool:
+        states.update(zip(to_fetch, pool.map(fetch, to_fetch)))
+    return states
+
 
 class ResultsDBWriter:
-
-    test_state = {}
-
     def __init__(self, location=":memory:", wipe=True) -> None:
         self.table = connect(location)
-        if ResultsDBWriter.test_state == None:
-            ResultsDBReader.test_state = {}
         self.table.executescript(
             """
         PRAGMA synchronous=OFF;
@@ -85,28 +118,6 @@ class ResultsDBWriter:
         """
         )
 
-    @classmethod
-    def get_test_state(cls, test_name):
-        if test_name in cls.test_state:
-            return cls.test_state[test_name]
-        try:
-            data = (
-                boto3.client("s3")
-                .get_object(
-                    Bucket="ray-ci-results",
-                    Key=f"ray_tests/{test_name.replace('/', '_')}.json",
-                )
-                .get("Body")
-                .read()
-                .decode("utf-8")
-            )
-            cls.test_state[test_name] = json.loads(data).get("state", "passing")
-        except ClientError as e:
-            print(f"Failed to get test state for {test_name}: {e}")
-            cls.test_state[test_name] = "passing"
-
-        return cls.test_state[test_name]
-
     def write_commits(self, commits: List[GHCommit]):
         self.table.executemany(
             "INSERT INTO commits VALUES (?,?,?,?,?,?)",
@@ -125,6 +136,11 @@ class ResultsDBWriter:
         self.table.commit()
 
     def write_build_results(self, results: List[BuildResult]):
+        states = fetch_test_states(
+            f"{build_result.os}:{test.test_name}"
+            for build_result in results
+            for test in build_result.results
+        )
         records_to_insert = []
         for build_result in results:
             for test in build_result.results:
@@ -139,7 +155,7 @@ class ResultsDBWriter:
                         build_result.job_id,
                         build_result.sha,
                         test.total_duration_s,
-                        test.is_labeled_flaky or ResultsDBWriter.get_test_state(name) == 'flaky',
+                        test.is_labeled_flaky or states[name] == "flaky",
                         test.owner,
                         test.is_labeled_staging,
                     )
